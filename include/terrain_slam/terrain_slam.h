@@ -23,10 +23,38 @@
 #ifndef TERRAIN_SLAM_H
 #define TERRAIN_SLAM_H
 
+#include <CGAL/Simple_cartesian.h>
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Delaunay_triangulation_2.h>
+#include <CGAL/Triangulation_vertex_base_with_info_2.h>
+#include <CGAL/Aff_transformation_3.h>
+
+#include <opencv2/opencv.hpp>
+
+#include <vector>
+
+typedef CGAL::Simple_cartesian<double>     Kernel;
+typedef CGAL::Aff_transformation_3<Kernel> Aff3;
+typedef Kernel::Point_3 Point3;
+typedef Kernel::Vector_3 Vector3;
+
+typedef CGAL::Exact_predicates_inexact_constructions_kernel KernelT;
+typedef CGAL::Triangulation_vertex_base_with_info_2<unsigned, KernelT> Vb;
+typedef CGAL::Triangulation_data_structure_2<Vb> Tds;
+typedef CGAL::Triangulation_2<KernelT, Tds>::Locate_type LocateType;
+typedef CGAL::Delaunay_triangulation_2<KernelT, Tds> Delaunay;
+typedef Delaunay::Point Point;
+typedef Delaunay::Face_handle FaceHandle;
+typedef Delaunay::Vertex_handle VertexHandle;
+
 namespace terrain_slam {
 class TerrainSlam {
 public:
-  TerrainSlam();
+  TerrainSlam(int argc, char** argv);
+  void parseCommandLine(int argc, char** argv);
+  void process(const std::string& pose_filename, const std::string& clouds_dir);
+  bool readCameraPoses(const std::string& filename, std::vector<Aff3>& tf);
+  bool cvToCGAL(const cv::Mat& in, std::vector<Aff3>& out);
 
 };  // Class
 }   // Namespace
