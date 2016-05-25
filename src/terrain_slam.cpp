@@ -40,19 +40,22 @@ void terrain_slam::TerrainSlam::parseCommandLine(int argc, char** argv) {
 
     string pose_filename;
     string clouds_dir;
+    double size = 5.0;
 
     description.add_options()
     ("help,h", "Display this help message")
-    ("clouds,c", po::value<string>(), "Input folder where the point clouds are");
+    ("clouds,c", po::value<string>(), "Input folder where the point clouds are")
+    ("size,s", po::value<double>()->default_value(size), "Patch size in meters");
 
     po::variables_map vm;
     po::store(po::command_line_parser(argc, argv).options(description).run(), vm);
-    //po::notify(vm);
+    po::notify(vm);
 
     if (vm.count("help")) {
       cout << description;
     } else if (vm.count("clouds")) {
       clouds_dir = vm["clouds"].as<string>();
+      if (vm.count("size")) size = vm["size"].as<double>();
       std::cout.setf(std::ios::boolalpha);
       cout << "Running Terrain Slam with the following parameters:"
          << "\n\t* Clouds directory  : " << clouds_dir << endl;
@@ -70,8 +73,13 @@ void terrain_slam::TerrainSlam::process(const std::string& clouds_dir) {
   vector<string> cloud_names;
   vector<string> cloud_paths;
   getCloudPaths(clouds_dir, "yml", cloud_names, cloud_paths);
-  bool success = readFiles(cloud_names, cloud_paths);
+  readFiles(cloud_names, cloud_paths);
+  // processPatches();
 }
+
+// void terrain_slam::TerrainSlam::processPatches() {
+
+// }
 
 void terrain_slam::TerrainSlam::getCloudPaths(const string& path,
                                               const string& format,
@@ -109,22 +117,44 @@ void terrain_slam::TerrainSlam::getCloudPaths(const string& path,
   }
 }
 
-bool terrain_slam::TerrainSlam::readFiles(const vector<string>& cloud_names,
-                                          const vector<string>& cloud_paths) {
-  robot_position_.clear();
-  robot_orientation_.clear();
-  camera_position_.clear();
-  camera_orientation_.clear();
-  clouds_.clear();
+Eigen::Quaternion<double> terrain_slam::TerrainSlam::rpyToRotationMatrix(double roll, double pitch, double yaw) {
+  Eigen::AngleAxisd roll_angle(roll, Eigen::Vector3d::UnitZ());
+  Eigen::AngleAxisd yaw_angle(yaw, Eigen::Vector3d::UnitY());
+  Eigen::AngleAxisd pitch_angle(pitch, Eigen::Vector3d::UnitX());
+  Eigen::Quaternion<double> q = roll_angle * yaw_angle * pitch_angle;
+  return q;
+}
 
-  robot_position_.resize(cloud_paths.size());
-  robot_orientation_.resize(cloud_paths.size());
-  camera_position_.resize(cloud_paths.size());
-  camera_orientation_.resize(cloud_paths.size());
+Eigen::Matrix4d terrain_slam::TerrainSlam::buildTransform(const Eigen::Quaternion<double> q, const Eigen::Vector3d t) {
+  Eigen::Matrix3d R = q.matrix();
+  Eigen::Matrix4d T;
+  // Set to Identity to make bottom row of Matrix 0,0,0,1
+  T.setIdentity();
+  T.block<3,3>(0,0) = R;
+  T(0,3) = t(0);
+  T(1,3) = t(1);
+  T(2,3) = t(2);
+  return T;
+}
+
+void terrain_slam::TerrainSlam::cv2eigen(const cv::Point3d& p, Eigen::Vector3d& v) {
+  v(0) = p.x;
+  v(1) = p.y;
+  v(2) = p.z;
+}
+
+void terrain_slam::TerrainSlam::readFiles(const vector<string>& cloud_names,
+                                          const vector<string>& cloud_paths) {
+  clouds_.clear();
+  robot_tf_.clear();
+  camera_tf_.clear();
+
   clouds_.resize(cloud_paths.size());
+  robot_tf_.resize(cloud_paths.size());
+  camera_tf_.resize(cloud_paths.size());
 
   std::cout << "Reading clouds... " << std::endl;
-  //#pragma omp parallel for
+  #pragma omp parallel for
   for (size_t i = 0; i < cloud_paths.size(); i++) {
     FileStorage fs;
     fs.open(cloud_paths[i], FileStorage::READ);
@@ -137,24 +167,29 @@ bool terrain_slam::TerrainSlam::readFiles(const vector<string>& cloud_names,
       fs["robot_orientation"] >> robot_orientation;
       fs["camera_position"] >> camera_position;
       fs["camera_orientation"] >> camera_orientation;
+      clouds_[i].resize(points.size());
+      for (size_t j = 0; j < points.size(); j++) {
+        cv2eigen(points[j], clouds_[i][j]);
+      }
 
-      robot_position_[i] = robot_position;
-      robot_orientation_[i] = robot_orientation;
-      camera_position_[i] = camera_position;
-      camera_orientation_[i] = camera_orientation;
-      clouds_[i] = points;
+      Eigen::Quaternion<double> q;
+      Eigen::Vector3d t;
+
+      // Compute transformation matrix for robot
+      q = rpyToRotationMatrix(robot_orientation.x, robot_orientation.y, robot_orientation.z);
+      t = Eigen::Vector3d(robot_position.x, robot_position.y, robot_position.z);
+      robot_tf_[i]  = buildTransform(q, t);
+
+      // Compute transformpation matrix for camera
+      q = rpyToRotationMatrix(camera_orientation.x, camera_orientation.y, camera_orientation.z);
+      t = Eigen::Vector3d(camera_position.x, camera_position.y, camera_position.z);
+      camera_tf_[i] = buildTransform(q, t);
     } else {
       cout << "Unable to open camera pose file at " << cloud_paths[i]
            << ".  Please verify the path." << endl;
     }
   }
-
-  for (size_t i = 0; i < cloud_paths.size(); i++) {
-    cout << robot_position_[i] << endl;
-  }
   std::cout << "Clouds loaded! " << std::endl;
-
-  return true;
 }
 
 bool terrain_slam::TerrainSlam::cvToCGAL(const Mat& in, vector<Aff3>& out) {

@@ -28,7 +28,7 @@
 #include <CGAL/Delaunay_triangulation_2.h>
 #include <CGAL/Triangulation_vertex_base_with_info_2.h>
 #include <CGAL/Aff_transformation_3.h>
-
+#include <Eigen/Geometry>
 #include <opencv2/opencv.hpp>
 
 #include <vector>
@@ -53,18 +53,19 @@ public:
   TerrainSlam(int argc, char** argv);
   void parseCommandLine(int argc, char** argv);
   void process(const std::string& clouds_dir);
-  bool readFiles(const std::vector<std::string>& cloud_names, const std::vector<std::string>& cloud_paths);
+  void readFiles(const std::vector<std::string>& cloud_names, const std::vector<std::string>& cloud_paths);
   bool cvToCGAL(const cv::Mat& in, std::vector<Aff3>& out);
   void getCloudPaths(const std::string& path,
                      const std::string& format,
                      std::vector<std::string>& cloud_names,
                      std::vector<std::string>& cloud_paths);
+  Eigen::Quaternion<double> rpyToRotationMatrix(double roll, double pitch, double yaw);
+  Eigen::Matrix4d buildTransform(const Eigen::Quaternion<double> q, const Eigen::Vector3d t);
+  void cv2eigen(const cv::Point3d& p, Eigen::Vector3d& v);
 
-  std::vector<cv::Point3d> robot_position_;
-  std::vector<cv::Point3d> robot_orientation_;
-  std::vector<cv::Point3d> camera_position_;
-  std::vector<cv::Point3d> camera_orientation_;
-  std::vector<std::vector<cv::Point3d> > clouds_;
+  std::vector<Eigen::Matrix4d> robot_tf_;
+  std::vector<Eigen::Matrix4d> camera_tf_;
+  std::vector<std::vector<Eigen::Vector3d> > clouds_;
 
 };  // Class
 }   // Namespace

@@ -50,6 +50,12 @@ endif()
 find_package(GMP REQUIRED)
 find_package(MPFR REQUIRED)
 
+SET( EIGEN3_INCLUDE_DIR "$ENV{EIGEN3_INCLUDE_DIR}" )
+IF( NOT EIGEN3_INCLUDE_DIR )
+    MESSAGE( FATAL_ERROR "Please point the environment variable EIGEN3_INCLUDE_DIR to the include directory of your Eigen3 installation.")
+ENDIF()
+INCLUDE_DIRECTORIES ( "${EIGEN3_INCLUDE_DIR}" )
+
 find_package(OpenMP)
 if (OPENMP_FOUND)
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
@@ -61,12 +67,12 @@ FILE(GLOB_RECURSE MY_HEADERS include/*.h)
 # include for local directory
 include_directories( BEFORE include ${GMP_INCLUDE_DIRS}
                                     ${OpenCV_INCLUDE_DIRS}
-                                    ${MPFR_INCLUDE_DIRS})
+                                    ${MPFR_INCLUDE_DIRS}
+                                    ${Eigen3_INCLUDE_DIRS})
 
-add_executable(terrain_slam src/terrain_slam.cpp
-                            ${MY_HEADERS})
+add_executable(terrain_slam src/terrain_slam.cpp ${MY_HEADERS})
 
-add_to_cached_list( CGAL_EXECUTABLE_TARGETS terrain_slam )
+add_to_cached_list(CGAL_EXECUTABLE_TARGETS terrain_slam)
 
 # # Link the executable to CGAL and third-party libraries
 target_link_libraries(terrain_slam ${CGAL_LIBRARIES}
