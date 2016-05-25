@@ -71,7 +71,6 @@ void terrain_slam::TerrainSlam::process(const std::string& clouds_dir) {
   vector<string> cloud_paths;
   getCloudPaths(clouds_dir, "yml", cloud_names, cloud_paths);
   bool success = readFiles(cloud_names, cloud_paths);
-  // vector<vector<Point3> > points = readPointClouds(clouds_dir);
 }
 
 void terrain_slam::TerrainSlam::getCloudPaths(const string& path,
@@ -79,29 +78,30 @@ void terrain_slam::TerrainSlam::getCloudPaths(const string& path,
                                               vector<string>& cloud_names,
                                               vector<string>& cloud_paths) {
   boost::filesystem::path p(path);
-  std::vector<boost::filesystem::directory_entry> file_entries;
+  typedef vector<boost::filesystem::path> vec; // store paths,
+  vec v;                                       // so we can sort them later
   try {
-    if (boost::filesystem::exists(p)) {
-      if (boost::filesystem::is_regular_file(p)) {
-      } else if (boost::filesystem::is_directory(p)) {
-        std::copy(boost::filesystem::recursive_directory_iterator(p),
-                  boost::filesystem::recursive_directory_iterator(),
-                  std::back_inserter(file_entries));
+    if (exists(p)) {
+      if (is_directory(p)) {
+        copy(boost::filesystem::directory_iterator(p),
+             boost::filesystem::directory_iterator(),
+             back_inserter(v));
+        sort(v.begin(), v.end());  // sort, since directory iteration
+                                   // is not ordered on some file systems
       } else {
-        std::cout << p <<
-          " exists, but is neither a regular file nor a directory\n";
+        cout << p << " exists, but is neither a regular file nor a directory\n";
       }
     } else {
-      std::cout << p << " does not exist\n";
+      cout << p << " does not exist\n";
     }
   } catch (const boost::filesystem::filesystem_error& ex) {
-    std::cout << ex.what() << '\n';
+    cout << ex.what() << '\n';
   }
 
-  for (size_t i = 0; i < file_entries.size(); i++) {
-    std::string full_cloud_path(file_entries[i].path().string());
-    std::string name(file_entries[i].path().stem().string());
-    std::string extension(file_entries[i].path().extension().string());
+  for (size_t i = 0; i < v.size(); i++) {
+    std::string full_cloud_path(v[i].string());
+    std::string name(v[i].stem().string());
+    std::string extension(v[i].extension().string());
     if (extension == "." + format) {
       cloud_names.push_back(name);
       cloud_paths.push_back(full_cloud_path);
@@ -124,7 +124,7 @@ bool terrain_slam::TerrainSlam::readFiles(const vector<string>& cloud_names,
   clouds_.resize(cloud_paths.size());
 
   std::cout << "Reading clouds... " << std::endl;
-  #pragma omp parallel for
+  //#pragma omp parallel for
   for (size_t i = 0; i < cloud_paths.size(); i++) {
     FileStorage fs;
     fs.open(cloud_paths[i], FileStorage::READ);
@@ -148,7 +148,12 @@ bool terrain_slam::TerrainSlam::readFiles(const vector<string>& cloud_names,
            << ".  Please verify the path." << endl;
     }
   }
+
+  for (size_t i = 0; i < cloud_paths.size(); i++) {
+    cout << robot_position_[i] << endl;
+  }
   std::cout << "Clouds loaded! " << std::endl;
+
   return true;
 }
 
