@@ -52,9 +52,19 @@ class TerrainSlam {
 public:
   TerrainSlam(int argc, char** argv);
   void parseCommandLine(int argc, char** argv);
-  void process(const std::string& pose_filename, const std::string& clouds_dir);
-  bool readCameraPoses(const std::string& filename, std::vector<Aff3>& tf);
+  void process(const std::string& clouds_dir);
+  bool readFiles(const std::vector<std::string>& cloud_names, const std::vector<std::string>& cloud_paths);
   bool cvToCGAL(const cv::Mat& in, std::vector<Aff3>& out);
+  void getCloudPaths(const std::string& path,
+                     const std::string& format,
+                     std::vector<std::string>& cloud_names,
+                     std::vector<std::string>& cloud_paths);
+
+  std::vector<cv::Point3d> robot_position_;
+  std::vector<cv::Point3d> robot_orientation_;
+  std::vector<cv::Point3d> camera_position_;
+  std::vector<cv::Point3d> camera_orientation_;
+  std::vector<std::vector<cv::Point3d> > clouds_;
 
 };  // Class
 }   // Namespace

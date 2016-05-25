@@ -43,7 +43,6 @@ void terrain_slam::TerrainSlam::parseCommandLine(int argc, char** argv) {
 
     description.add_options()
     ("help,h", "Display this help message")
-    ("pose,p", po::value<string>(), "Input file with robot positions")
     ("clouds,c", po::value<string>(), "Input folder where the point clouds are");
 
     po::variables_map vm;
@@ -52,14 +51,12 @@ void terrain_slam::TerrainSlam::parseCommandLine(int argc, char** argv) {
 
     if (vm.count("help")) {
       cout << description;
-    } else if (vm.count("pose") && vm.count("clouds")) {
-      pose_filename   = vm["pose"].as<string>();
+    } else if (vm.count("clouds")) {
       clouds_dir = vm["clouds"].as<string>();
       std::cout.setf(std::ios::boolalpha);
       cout << "Running Terrain Slam with the following parameters:"
-         << "\n\t* Clouds directory  : " << clouds_dir
-         << "\n\t* Pose file         : " << pose_filename << endl;
-      process(pose_filename, clouds_dir);
+         << "\n\t* Clouds directory  : " << clouds_dir << endl;
+      process(clouds_dir);
     } else {
       cout << "REQUIRED arguments were not provided." << endl;
       cout << description;
@@ -69,35 +66,90 @@ void terrain_slam::TerrainSlam::parseCommandLine(int argc, char** argv) {
   }
 }
 
-void terrain_slam::TerrainSlam::process(const std::string& pose_filename,
-                                   const std::string& clouds_dir) {
-  vector<Aff3> tf;
-  bool success = readCameraPoses(pose_filename, tf);
+void terrain_slam::TerrainSlam::process(const std::string& clouds_dir) {
+  vector<string> cloud_names;
+  vector<string> cloud_paths;
+  getCloudPaths(clouds_dir, "yml", cloud_names, cloud_paths);
+  bool success = readFiles(cloud_names, cloud_paths);
   // vector<vector<Point3> > points = readPointClouds(clouds_dir);
 }
 
-bool terrain_slam::TerrainSlam::readCameraPoses(const std::string& filename, vector<Aff3>& tf) {
+void terrain_slam::TerrainSlam::getCloudPaths(const string& path,
+                                              const string& format,
+                                              vector<string>& cloud_names,
+                                              vector<string>& cloud_paths) {
+  boost::filesystem::path p(path);
+  std::vector<boost::filesystem::directory_entry> file_entries;
   try {
-    if (boost::filesystem::exists(filename)) {
-      FileStorage fs;
-      fs.open(filename, FileStorage::READ);
-      if (fs.isOpened()) {
-        cout << "Camera parameter file found!" << endl;
-        Mat poses;
-        fs["poses"] >> poses;
-        return cvToCGAL(poses, tf);
+    if (boost::filesystem::exists(p)) {
+      if (boost::filesystem::is_regular_file(p)) {
+      } else if (boost::filesystem::is_directory(p)) {
+        std::copy(boost::filesystem::recursive_directory_iterator(p),
+                  boost::filesystem::recursive_directory_iterator(),
+                  std::back_inserter(file_entries));
       } else {
-        cout << "Unable to open camera pose file at " << filename
-             << ".  Please verify the path." << endl;
-        return false;
+        std::cout << p <<
+          " exists, but is neither a regular file nor a directory\n";
       }
     } else {
-      std::cout << "Pose filename: " << filename << " does not exist!\n";
+      std::cout << p << " does not exist\n";
     }
   } catch (const boost::filesystem::filesystem_error& ex) {
     std::cout << ex.what() << '\n';
   }
-  return false;
+
+  for (size_t i = 0; i < file_entries.size(); i++) {
+    std::string full_cloud_path(file_entries[i].path().string());
+    std::string name(file_entries[i].path().stem().string());
+    std::string extension(file_entries[i].path().extension().string());
+    if (extension == "." + format) {
+      cloud_names.push_back(name);
+      cloud_paths.push_back(full_cloud_path);
+    }
+  }
+}
+
+bool terrain_slam::TerrainSlam::readFiles(const vector<string>& cloud_names,
+                                          const vector<string>& cloud_paths) {
+  robot_position_.clear();
+  robot_orientation_.clear();
+  camera_position_.clear();
+  camera_orientation_.clear();
+  clouds_.clear();
+
+  robot_position_.resize(cloud_paths.size());
+  robot_orientation_.resize(cloud_paths.size());
+  camera_position_.resize(cloud_paths.size());
+  camera_orientation_.resize(cloud_paths.size());
+  clouds_.resize(cloud_paths.size());
+
+  std::cout << "Reading clouds... " << std::endl;
+  #pragma omp parallel for
+  for (size_t i = 0; i < cloud_paths.size(); i++) {
+    FileStorage fs;
+    fs.open(cloud_paths[i], FileStorage::READ);
+    if (fs.isOpened()) {
+      // cout << "File found! " << cloud_names[i] << endl;
+      std::vector<cv::Point3d> points;
+      cv::Point3d robot_position, robot_orientation, camera_position, camera_orientation;
+      fs["points"] >> points;
+      fs["robot_position"] >> robot_position;
+      fs["robot_orientation"] >> robot_orientation;
+      fs["camera_position"] >> camera_position;
+      fs["camera_orientation"] >> camera_orientation;
+
+      robot_position_[i] = robot_position;
+      robot_orientation_[i] = robot_orientation;
+      camera_position_[i] = camera_position;
+      camera_orientation_[i] = camera_orientation;
+      clouds_[i] = points;
+    } else {
+      cout << "Unable to open camera pose file at " << cloud_paths[i]
+           << ".  Please verify the path." << endl;
+    }
+  }
+  std::cout << "Clouds loaded! " << std::endl;
+  return true;
 }
 
 bool terrain_slam::TerrainSlam::cvToCGAL(const Mat& in, vector<Aff3>& out) {

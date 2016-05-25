@@ -50,6 +50,12 @@ endif()
 find_package(GMP REQUIRED)
 find_package(MPFR REQUIRED)
 
+find_package(OpenMP)
+if (OPENMP_FOUND)
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+endif()
+
 FILE(GLOB_RECURSE MY_HEADERS include/*.h)
 
 # include for local directory
