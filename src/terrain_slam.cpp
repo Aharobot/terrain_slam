@@ -59,7 +59,7 @@ void terrain_slam::TerrainSlam::parseCommandLine(int argc, char** argv) {
       std::cout.setf(std::ios::boolalpha);
       cout << "Running Terrain Slam with the following parameters:"
          << "\n\t* Clouds directory  : " << clouds_dir << endl;
-      process(clouds_dir);
+      process(clouds_dir, size);
     } else {
       cout << "REQUIRED arguments were not provided." << endl;
       cout << description;
@@ -69,17 +69,28 @@ void terrain_slam::TerrainSlam::parseCommandLine(int argc, char** argv) {
   }
 }
 
-void terrain_slam::TerrainSlam::process(const std::string& clouds_dir) {
+void terrain_slam::TerrainSlam::process(const std::string& clouds_dir, double size) {
+  // Set patch size
+  patch_size_ = size;
+
+  // Retrieve list of files
   vector<string> cloud_names;
   vector<string> cloud_paths;
   getCloudPaths(clouds_dir, "yml", cloud_names, cloud_paths);
+
+  // Read files and load them in memory
   readFiles(cloud_names, cloud_paths);
-  // processPatches();
+
+  // Do the job!
+  processPatches();
 }
 
-// void terrain_slam::TerrainSlam::processPatches() {
+void terrain_slam::TerrainSlam::processPatches() {
+  for (size_t i = 0; i < clouds_.size(); i++) {
+    // Accumulate clouds while distance is less than patch_size_
 
-// }
+  }
+}
 
 void terrain_slam::TerrainSlam::getCloudPaths(const string& path,
                                               const string& format,

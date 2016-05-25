@@ -52,7 +52,7 @@ class TerrainSlam {
 public:
   TerrainSlam(int argc, char** argv);
   void parseCommandLine(int argc, char** argv);
-  void process(const std::string& clouds_dir);
+  void process(const std::string& clouds_dir, double size);
   void readFiles(const std::vector<std::string>& cloud_names, const std::vector<std::string>& cloud_paths);
   bool cvToCGAL(const cv::Mat& in, std::vector<Aff3>& out);
   void getCloudPaths(const std::string& path,
@@ -62,7 +62,9 @@ public:
   Eigen::Quaternion<double> rpyToRotationMatrix(double roll, double pitch, double yaw);
   Eigen::Matrix4d buildTransform(const Eigen::Quaternion<double> q, const Eigen::Vector3d t);
   void cv2eigen(const cv::Point3d& p, Eigen::Vector3d& v);
+  void processPatches();
 
+  double patch_size_;
   std::vector<Eigen::Matrix4d> robot_tf_;
   std::vector<Eigen::Matrix4d> camera_tf_;
   std::vector<std::vector<Eigen::Vector3d> > clouds_;
