@@ -23,6 +23,8 @@
 #ifndef TERRAIN_SLAM_H
 #define TERRAIN_SLAM_H
 
+#include <terrain_slam/ply_saver.h>
+
 #include <CGAL/Simple_cartesian.h>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Delaunay_triangulation_2.h>
@@ -63,11 +65,14 @@ public:
   Eigen::Matrix4d buildTransform(const Eigen::Quaternion<double> q, const Eigen::Vector3d t);
   void cv2eigen(const cv::Point3d& p, Eigen::Vector3d& v);
   void processPatches();
+  void savePatch(const std::vector<Eigen::Vector3d>& cloud, int idx);
+  std::vector<Eigen::Vector3d> createPatch(int id1, int id2);
 
   double patch_size_;
   std::vector<Eigen::Matrix4d> robot_tf_;
   std::vector<Eigen::Matrix4d> camera_tf_;
   std::vector<std::vector<Eigen::Vector3d> > clouds_;
+  PlySaver saver_;
 
 };  // Class
 }   // Namespace

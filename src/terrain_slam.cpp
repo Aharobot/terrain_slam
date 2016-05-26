@@ -25,6 +25,7 @@
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 #include <iostream>
+#include <fstream>
 
 namespace po = boost::program_options;
 using namespace std;
@@ -86,10 +87,46 @@ void terrain_slam::TerrainSlam::process(const std::string& clouds_dir, double si
 }
 
 void terrain_slam::TerrainSlam::processPatches() {
+  double distance = 0;
+  int pivot_idx = 0;
+
+  std::cout << "Processing... " << std::endl;
   for (size_t i = 0; i < clouds_.size(); i++) {
     // Accumulate clouds while distance is less than patch_size_
-
+    Eigen::Vector3d pos1 = robot_tf_[pivot_idx].block<3,1>(0,3);
+    Eigen::Vector3d pos2 = robot_tf_[i].block<3,1>(0,3);
+    Eigen::Vector3d diff = pos2 - pos1;
+    distance = diff.norm();
+    if (distance > patch_size_) {
+      std::cout << "Patch from " << pivot_idx << " to " << i << std::endl;
+      std::vector<Eigen::Vector3d> patch;
+      patch = createPatch(pivot_idx, i);
+      savePatch(patch, pivot_idx);
+      pivot_idx = i + 1;
+    }
   }
+}
+
+// Save the patch with the position information
+void terrain_slam::TerrainSlam::savePatch(const std::vector<Eigen::Vector3d>& cloud,
+                                          int idx) {
+  std::ostringstream ss;
+  ss << std::setw(8) << std::setfill('0') << idx;
+  std::string cloud_filename = "cloud" + ss.str() + ".ply";
+  std::cout << "Saving ply file " << cloud_filename << std::endl;
+  saver_.saveCloud(cloud_filename, cloud);
+}
+
+// Concatenate a pointcloud patch from indexes i to j
+std::vector<Eigen::Vector3d> terrain_slam::TerrainSlam::createPatch(int id1, int id2) {
+  // Accumulate pointcloud
+  std::vector<Eigen::Vector3d> patch;
+  for (size_t i = id1; i <= id2; i++) {
+    for (size_t j = 0; j < clouds_[i].size(); j++) {
+      patch.push_back(clouds_[i][j]);
+    }
+  }
+  return patch;
 }
 
 void terrain_slam::TerrainSlam::getCloudPaths(const string& path,
