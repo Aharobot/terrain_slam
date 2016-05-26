@@ -110,9 +110,13 @@ void terrain_slam::TerrainSlam::processPatches() {
 // Save the patch with the position information
 void terrain_slam::TerrainSlam::savePatch(const std::vector<Eigen::Vector3d>& cloud,
                                           int idx) {
+  std::string path("../output");
+  boost::filesystem::path dir(path);
+  boost::filesystem::create_directory(dir);
+
   std::ostringstream ss;
   ss << std::setw(8) << std::setfill('0') << idx;
-  std::string cloud_filename = "cloud" + ss.str() + ".ply";
+  std::string cloud_filename = path + "/cloud" + ss.str() + ".ply";
   std::cout << "Saving ply file " << cloud_filename << std::endl;
   saver_.saveCloud(cloud_filename, cloud);
 }
