@@ -25,17 +25,17 @@
 
 #include <terrain_slam/ply_saver.h>
 
-#include <CGAL/Simple_cartesian.h>
-#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
-#include <CGAL/Delaunay_triangulation_2.h>
-#include <CGAL/Triangulation_vertex_base_with_info_2.h>
 #include <CGAL/Aff_transformation_3.h>
+#include <CGAL/Delaunay_triangulation_2.h>
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Simple_cartesian.h>
+#include <CGAL/Triangulation_vertex_base_with_info_2.h>
 #include <Eigen/Geometry>
 #include <opencv2/opencv.hpp>
 
 #include <vector>
 
-typedef CGAL::Simple_cartesian<double>     Kernel;
+typedef CGAL::Simple_cartesian<double> Kernel;
 typedef CGAL::Aff_transformation_3<Kernel> Aff3;
 typedef Kernel::Point_3 Point3;
 typedef Kernel::Vector_3 Vector3;
@@ -50,22 +50,35 @@ typedef Delaunay::Face_handle FaceHandle;
 typedef Delaunay::Vertex_handle VertexHandle;
 
 namespace terrain_slam {
+
+struct Patch {
+public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+  Eigen::Matrix points;
+  Eigen::Matrix tf;
+  double timestamp;
+}
+
 class TerrainSlam {
 public:
-  TerrainSlam(int argc, char** argv);
-  void parseCommandLine(int argc, char** argv);
-  void process(const std::string& clouds_dir, double size);
-  void readFiles(const std::vector<std::string>& cloud_names, const std::vector<std::string>& cloud_paths);
-  bool cvToCGAL(const cv::Mat& in, std::vector<Aff3>& out);
-  void getCloudPaths(const std::string& path,
-                     const std::string& format,
-                     std::vector<std::string>& cloud_names,
-                     std::vector<std::string>& cloud_paths);
-  Eigen::Quaternion<double> rpyToRotationMatrix(double roll, double pitch, double yaw);
-  Eigen::Matrix4d buildTransform(const Eigen::Quaternion<double> q, const Eigen::Vector3d t);
-  void cv2eigen(const cv::Point3d& p, Eigen::Vector3d& v);
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+  TerrainSlam(int argc, char **argv);
+  void parseCommandLine(int argc, char **argv);
+  void process(const std::string &clouds_dir, double size);
+  void readFiles(const std::vector<std::string> &cloud_names,
+                 const std::vector<std::string> &cloud_paths);
+  bool cvToCGAL(const cv::Mat &in, std::vector<Aff3> &out);
+  void getCloudPaths(const std::string &path, const std::string &format,
+                     std::vector<std::string> &cloud_names,
+                     std::vector<std::string> &cloud_paths);
+  Eigen::Quaternion<double> rpyToRotationMatrix(double roll, double pitch,
+                                                double yaw);
+  Eigen::Matrix4d buildTransform(const Eigen::Quaternion<double> q,
+                                 const Eigen::Vector3d t);
+  std::vector<Eigen::Vector3d> centerPatch(const std::vector<Eigen::Vector3d> &cloud);
+  void cv2eigen(const cv::Point3d &p, Eigen::Vector3d &v);
   void processPatches();
-  void savePatch(const std::vector<Eigen::Vector3d>& cloud, int idx);
+  void savePatch(const std::vector<Eigen::Vector3d> &cloud, int idx);
   std::vector<Eigen::Vector3d> createPatch(int id1, int id2);
 
   double patch_size_;
@@ -74,7 +87,7 @@ public:
   std::vector<std::vector<Eigen::Vector3d> > clouds_;
   PlySaver saver_;
 
-};  // Class
-}   // Namespace
+}; // Class
+} // Namespace
 
 #endif // TERRAIN_SLAM_H

@@ -50,7 +50,8 @@ endif()
 find_package(GMP REQUIRED)
 find_package(MPFR REQUIRED)
 
-SET( EIGEN3_INCLUDE_DIR "$ENV{EIGEN3_INCLUDE_DIR}" )
+# SET( EIGEN3_INCLUDE_DIR "$ENV{EIGEN3_INCLUDE_DIR}" )
+SET( EIGEN3_INCLUDE_DIR "/usr/include/eigen3" )
 IF( NOT EIGEN3_INCLUDE_DIR )
     MESSAGE( FATAL_ERROR "Please point the environment variable EIGEN3_INCLUDE_DIR to the include directory of your Eigen3 installation.")
 ENDIF()
@@ -60,6 +61,12 @@ find_package(OpenMP)
 if (OPENMP_FOUND)
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+endif()
+
+find_package(libpointmatcher HINTS "/usr/local/lib/")
+if ( NOT libpointmatcher_FOUND )
+  message(STATUS "This project requires the libpointmatcher library, and will not be compiled.")
+  return()
 endif()
 
 FILE(GLOB_RECURSE MY_HEADERS include/*.h)
@@ -82,4 +89,8 @@ target_link_libraries(terrain_slam ${CGAL_LIBRARIES}
                                         ${MPFR_LIBRARIES}
                                         ${OpenCV_LIBRARIES}
                                         ${Boost_LIBRARIES})
+
+add_executable(simple_icp src/simple_icp.cpp ${MY_HEADERS})
+
+target_link_libraries(simple_icp ${libpointmatcher_LIBRARIES})
 
