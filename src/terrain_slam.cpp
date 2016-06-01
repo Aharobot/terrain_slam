@@ -85,11 +85,17 @@ void terrain_slam::TerrainSlam::process(const std::string &clouds_dir,
   bool files_found = getCloudPaths(clouds_dir, "yml", cloud_names, cloud_paths);
 
   if (files_found) {
+    std::vector<LaserLine> lines;
     // Read files and load them in memory
-    readFiles(cloud_names, cloud_paths);
+    readFiles(cloud_names, cloud_paths, lines);
 
-    // Do the job!
-    processPatches();
+    // Create required length patches
+    std::vector<CloudPatch> patches;
+    createPatches(lines, patches);
+
+    // Search for overlapping patches
+    std::vector<std::pair<int, int> > candidates;
+    lookForCandidates(patches, candidates);
   }
 }
 
@@ -137,7 +143,8 @@ bool terrain_slam::TerrainSlam::getCloudPaths(const string &path,
 }
 
 void terrain_slam::TerrainSlam::readFiles(const vector<string> &cloud_names,
-                                          const vector<string> &cloud_paths) {
+                                          const vector<string> &cloud_paths,
+                                          std::vector<LaserLine>& lines) {
   std::cout << "Reading clouds... " << std::endl;
   for (size_t i = 0; i < cloud_paths.size(); i++) {
     FileStorage fs;
@@ -160,7 +167,7 @@ void terrain_slam::TerrainSlam::readFiles(const vector<string> &cloud_names,
       for (size_t j = 0; j < points.size(); j++) {
         line.add(cv2eigen(points[j]), j);
       }
-      lines_.push_back(line);
+      lines.push_back(line);
     } else {
       cout << "Unable to open camera pose file at " << cloud_paths[i]
            << ".  Please verify the path." << endl;
@@ -169,21 +176,23 @@ void terrain_slam::TerrainSlam::readFiles(const vector<string> &cloud_names,
   std::cout << "Clouds loaded! " << std::endl;
 }
 
-void terrain_slam::TerrainSlam::processPatches() {
+void
+terrain_slam::TerrainSlam::createPatches(
+    const std::vector<LaserLine>& lines, std::vector<CloudPatch>& patches) {
   double distance = 0;
   int pivot_idx = 0;
 
   std::cout << "Processing... " << std::endl;
-  for (size_t i = 0; i < lines_.size(); i++) {
+  for (size_t i = 0; i < lines.size(); i++) {
     // Accumulate clouds while distance is less than patch_size_
-    Eigen::Vector3d pos1 = lines_[pivot_idx].getPosition();
-    Eigen::Vector3d pos2 = lines_[i].getPosition();
+    Eigen::Vector3d pos1 = lines[pivot_idx].getPosition();
+    Eigen::Vector3d pos2 = lines[i].getPosition();
     Eigen::Vector3d diff = pos2 - pos1;
     distance = diff.norm();
     if (distance > patch_size_) {
 
-      CloudPatch patch(lines_, pivot_idx, i);
-      patches_.push_back(patch);
+      CloudPatch patch(lines, pivot_idx, i);
+      patches.push_back(patch);
 
       savePatch(patch, pivot_idx);
       pivot_idx = i + 1;
@@ -202,7 +211,16 @@ void terrain_slam::TerrainSlam::savePatch(
   ss << std::setw(8) << std::setfill('0') << idx;
   std::string cloud_filename = path + "/cloud" + ss.str() + ".ply";
   std::cout << "Saving ply file " << cloud_filename << std::endl;
-  saver_.saveCloud(cloud_filename, patch.getPoints());
+  PlySaver saver;
+  saver.saveCloud(cloud_filename, patch.getPoints());
+}
+
+
+void
+terrain_slam::TerrainSlam::lookForCandidates(
+    const std::vector<CloudPatch>& patches,
+    std::vector<std::pair<int, int> >& candidates) {
+
 }
 
 int main(int argc, char **argv) {

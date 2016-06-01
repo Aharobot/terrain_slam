@@ -47,7 +47,7 @@ public:
   Eigen::Matrix4d tf(void) const {
     return tf_;
   }
-  Eigen::Vector3d getPosition(void) {
+  Eigen::Vector3d getPosition(void) const {
     return tf_.block<3, 1>(0,3).transpose();
   }
 protected:
@@ -159,18 +159,39 @@ public:
   void parseCommandLine(int argc, char **argv);
   void process(const std::string &clouds_dir, double size);
   void readFiles(const std::vector<std::string> &cloud_names,
-                 const std::vector<std::string> &cloud_paths);
+                 const std::vector<std::string> &cloud_paths,
+                 std::vector<LaserLine>& lines);
   bool getCloudPaths(const std::string &path, const std::string &format,
                      std::vector<std::string> &cloud_names,
                      std::vector<std::string> &cloud_paths);
-  void processPatches();
+
+  /**
+   * @brief Using provided patch_size, splits the pointcloud into patches
+   *
+   * @param Lines Input laser lines
+   * @param patches Output vector of CloudPatches
+   */
+  void createPatches(const std::vector<LaserLine>& lines,
+                     std::vector<CloudPatch>& patches);
+
+  /**
+   * @brief Save the patch to a file
+   *
+   * @param patch CloudPatch to save
+   * @param idx All saved files follow the same name, you provide the numbering
+   */
   void savePatch(const CloudPatch& patch, int idx);
 
-  double patch_size_;
+  /**
+   * @brief Finds overlapping patches, and return their paired indexes
+   *
+   * @param patches Input vector of CloudPatch
+   * @param candidates Output vector of paired candidates
+   */
+  void lookForCandidates(const std::vector<CloudPatch>& patches,
+                         std::vector<std::pair<int, int> >& candidates);
 
-  std::vector<CloudPatch> patches_;
-  std::vector<LaserLine> lines_;
-  PlySaver saver_;
+  double patch_size_;
 
 }; // Class
 } // Namespace
