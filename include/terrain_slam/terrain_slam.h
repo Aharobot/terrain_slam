@@ -39,14 +39,18 @@ inline Eigen::Vector3d cv2eigen(const cv::Point3d &p) {
 class Transform {
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
   Transform(const Eigen::Matrix4d& tf) : tf_(tf) {}
+
   Transform(const Eigen::Vector3d& xyz, const Eigen::Vector3d& rpy) {
     Eigen::Quaternion<double> q = rpy2Rot(rpy);
     tf_ = buildTransform(q, xyz);
   }
+
   Eigen::Matrix4d tf(void) const {
     return tf_;
   }
+
   Eigen::Vector3d getPosition(void) const {
     return tf_.block<3, 1>(0,3).transpose();
   }
@@ -60,6 +64,7 @@ protected:
     Eigen::Quaternion<double> q = roll_angle * pitch_angle * yaw_angle;
     return q;
   }
+
   Eigen::Matrix4d buildTransform(const Eigen::Quaternion<double> q,
                                  const Eigen::Vector3d t) {
     Eigen::Matrix3d R = q.matrix();
@@ -94,6 +99,15 @@ public:
     points(3, i) = 1.0;
   }
 
+  Eigen::Vector3d getCentroid() const {
+    Eigen::Vector4d c(0, 0, 0, 1);
+    c = points.rowwise().sum();
+    c = c / (double)points.cols();
+    c = tf()*c;
+    Eigen::Vector3d v = c.hnormalized();
+    return v;
+  }
+
   // Points are stored column-wise
   Eigen::Matrix4Xd points;
 };
@@ -101,8 +115,10 @@ public:
 class CloudPatch: public Transform {
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+  Eigen::Matrix4Xd points;
+
   CloudPatch(const std::vector<LaserLine>& lines, int start_idx, int end_idx)
-      : Transform(lines[start_idx].tf()) {
+      : Transform(lines[start_idx].tf()), start_idx_(start_idx), end_idx_(end_idx) {
     for (size_t i = start_idx; i <= end_idx; i++)
       add(lines[i]);
   }
@@ -128,14 +144,26 @@ public:
       if (local_coordinate_frame) {
         m.col(i) = points.col(i);
       } else {
-        m.col(i) = tf_*points.col(i);
+        m.col(i) = tf()*points.col(i);
       }
     }
     return m;
   }
 
-  Eigen::Matrix4Xd points;
+  Eigen::Vector3d getCentroid() const {
+    Eigen::Vector4d c(0, 0, 0, 1);
+    c = points.rowwise().sum();
+    c = c / (double)points.cols();
+    c = tf()*c;
+    Eigen::Vector3d v = c.hnormalized();
+    return v;
+  }
+
 protected:
+  int start_idx_;
+  int end_idx_;
+  std::vector<LaserLine> lines_;
+
   Eigen::Matrix4Xd transform(const LaserLine& line) {
     Eigen::Matrix4Xd m(line.points.rows(), line.points.cols());
     for (int i = 0; i < line.points.cols(); i++) {
@@ -144,23 +172,59 @@ protected:
         m.col(i) = line.points.col(i);
       } else {
         // and the rest
-        m.col(i) = tf_.inverse()*line.tf()*line.points.col(i);
+        m.col(i) = tf().inverse()*line.tf()*line.points.col(i);
       }
     }
     return m;
   }
-  std::vector<LaserLine> lines_;
 };
 
 class TerrainSlam {
 public:
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   TerrainSlam(int argc, char **argv);
-  void parseCommandLine(int argc, char **argv);
+
+  /**
+   * @brief      Parse command line arguments
+   *
+   * @param[in]  argc        The argc command line argument
+   * @param      argv        The argv command line argument
+   * @param      clouds_dir  The clouds dir
+   * @param      size        The size of the patch
+   *
+   * @return     true if successful
+   */
+  bool parseCommandLine(int argc, char **argv, std::string& clouds_dir, double& size);
+
+  /**
+   * @brief      Main process function
+   *
+   * @param[in]  clouds_dir  The clouds dir
+   * @param[in]  size        The size of the patches in meters
+   */
   void process(const std::string &clouds_dir, double size);
+
+  /**
+   * @brief      Reads files.
+   *
+   * @param[in]  cloud_names  The cloud names
+   * @param[in]  cloud_paths  The cloud paths
+   * @param      lines        The laser lines
+   */
   void readFiles(const std::vector<std::string> &cloud_names,
                  const std::vector<std::string> &cloud_paths,
-                 std::vector<LaserLine>& lines);
+                 std::vector<LaserLine> &lines);
+
+  /**
+   * @brief      Use boost filesystem to explore the desired path for yml files
+   * where the pointclouds are stored using OpenCV FileStorage class.
+   *
+   * @param[in]  path         The path
+   * @param[in]  format       The extension format
+   * @param      cloud_names  Output vector containing the names of the files
+   * @param      cloud_paths  Output vector containing the full path to the files
+   *
+   * @return     true if any files have been found, false otherwise
+   */
   bool getCloudPaths(const std::string &path, const std::string &format,
                      std::vector<std::string> &cloud_names,
                      std::vector<std::string> &cloud_paths);
@@ -168,8 +232,8 @@ public:
   /**
    * @brief Using provided patch_size, splits the pointcloud into patches
    *
-   * @param Lines Input laser lines
-   * @param patches Output vector of CloudPatches
+   * @param[in]   Lines       Input laser lines
+   * @param       patches     Output vector of CloudPatches
    */
   void createPatches(const std::vector<LaserLine>& lines,
                      std::vector<CloudPatch>& patches);
@@ -177,16 +241,16 @@ public:
   /**
    * @brief Save the patch to a file
    *
-   * @param patch CloudPatch to save
-   * @param idx All saved files follow the same name, you provide the numbering
+   * @param[in]   patch       CloudPatch to save
+   * @param       idx         All saved files follow the same name, you provide the numbering
    */
   void savePatch(const CloudPatch& patch, int idx);
 
   /**
    * @brief Finds overlapping patches, and return their paired indexes
    *
-   * @param patches Input vector of CloudPatch
-   * @param candidates Output vector of paired candidates
+   * @param[in]   patches     Input vector of CloudPatch
+   * @param       candidates  Output vector of paired candidates
    */
   void lookForCandidates(const std::vector<CloudPatch>& patches,
                          std::vector<std::pair<int, int> >& candidates);
