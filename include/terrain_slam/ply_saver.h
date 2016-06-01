@@ -19,6 +19,15 @@ class PlySaver {
       writePoint(file, points[i]);
   }
 
+  void saveCloud(const std::string& filename,
+                 const Eigen::Matrix4Xd& points) {
+    std::ofstream file;
+    file.open(filename.c_str(), std::ofstream::out);
+    writeHeader(file, points.cols());
+    for (size_t i = 0; i < points.cols(); i++)
+      writePoint(file, points.block<3, 1>(0, i).transpose());
+  }
+
  private:
 
   void writeHeader(std::ofstream& file, int num_points) {

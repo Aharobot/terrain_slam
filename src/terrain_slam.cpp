@@ -26,6 +26,7 @@
 #include <boost/program_options.hpp>
 #include <fstream>
 #include <iostream>
+#include <iomanip>
 
 namespace po = boost::program_options;
 using namespace std;
@@ -81,91 +82,18 @@ void terrain_slam::TerrainSlam::process(const std::string &clouds_dir,
   // Retrieve list of files
   vector<string> cloud_names;
   vector<string> cloud_paths;
-  getCloudPaths(clouds_dir, "yml", cloud_names, cloud_paths);
+  bool files_found = getCloudPaths(clouds_dir, "yml", cloud_names, cloud_paths);
 
-  if (cloud_names.size() == 0) {
-    std::cout << "No clouds found. Aborting... " << std::endl;
-    return;
-  } else {
-    std::cout << "Found " << cloud_names.size() << " clouds!" << std::endl;
-  }
+  if (files_found) {
+    // Read files and load them in memory
+    readFiles(cloud_names, cloud_paths);
 
-  // Read files and load them in memory
-  readFiles(cloud_names, cloud_paths);
-
-  // Do the job!
-  processPatches();
-}
-
-void terrain_slam::TerrainSlam::processPatches() {
-  double distance = 0;
-  int pivot_idx = 0;
-
-  std::cout << "Processing... " << std::endl;
-  for (size_t i = 0; i < clouds_.size(); i++) {
-    // Accumulate clouds while distance is less than patch_size_
-    Eigen::Vector3d pos1 = robot_tf_[pivot_idx].block<3, 1>(0, 3);
-    Eigen::Vector3d pos2 = robot_tf_[i].block<3, 1>(0, 3);
-    Eigen::Vector3d diff = pos2 - pos1;
-    distance = diff.norm();
-    if (distance > patch_size_) {
-      std::cout << "Patch from " << pivot_idx << " to " << i << std::endl;
-      std::vector<Eigen::Vector3d> patch;
-      patch = createPatch(pivot_idx, i);
-      patch = centerPatch(patch);
-      savePatch(patch, pivot_idx);
-      pivot_idx = i + 1;
-    }
+    // Do the job!
+    processPatches();
   }
 }
 
-// Put the pointcloud centroid at the origin
-std::vector<Eigen::Vector3d> terrain_slam::TerrainSlam::centerPatch(
-    const std::vector<Eigen::Vector3d> &cloud) {
-  std::vector<Eigen::Vector3d> output;
-  // Accumulate pointcloud
-  Eigen::Vector3d average;
-  for (size_t i = 0; i < cloud.size(); i++) {
-    average += cloud[i];
-  }
-  average /= cloud.size();
-  for (size_t i = 0; i < cloud.size(); i++) {
-    output.push_back(cloud[i] - average);
-  }
-  return output;
-}
-
-// Save the patch with the position information
-void terrain_slam::TerrainSlam::savePatch(
-    const std::vector<Eigen::Vector3d> &cloud, int idx) {
-  std::string path("../output");
-  boost::filesystem::path dir(path);
-  boost::filesystem::create_directory(dir);
-
-  std::ostringstream ss;
-  ss << std::setw(8) << std::setfill('0') << idx;
-  std::string cloud_filename = path + "/cloud" + ss.str() + ".ply";
-  std::cout << "Saving ply file " << cloud_filename << std::endl;
-  saver_.saveCloud(cloud_filename, cloud);
-}
-
-// Concatenate a pointcloud patch from indexes i to j
-std::vector<Eigen::Vector3d> terrain_slam::TerrainSlam::createPatch(int id1,
-                                                                    int id2) {
-  // Accumulate pointcloud
-  std::vector<Eigen::Vector3d> patch;
-  Eigen::Matrix4d Tinv = robot_tf_[id1].inverse();
-  for (size_t i = id1; i <= id2; i++) {
-    for (size_t j = 0; j < clouds_[i].size(); j++) {
-      Eigen::Vector4d ph = clouds_[i][j].homogeneous();
-      Eigen::Vector4d pt = Tinv * robot_tf_[i] * ph;
-      patch.push_back(pt.hnormalized());
-    }
-  }
-  return patch;
-}
-
-void terrain_slam::TerrainSlam::getCloudPaths(const string &path,
+bool terrain_slam::TerrainSlam::getCloudPaths(const string &path,
                                               const string &format,
                                               vector<string> &cloud_names,
                                               vector<string> &cloud_paths) {
@@ -198,56 +126,24 @@ void terrain_slam::TerrainSlam::getCloudPaths(const string &path,
       cloud_paths.push_back(full_cloud_path);
     }
   }
-}
 
-Eigen::Quaternion<double>
-terrain_slam::TerrainSlam::rpyToRotationMatrix(double roll, double pitch,
-                                               double yaw) {
-  Eigen::AngleAxisd roll_angle(roll, Eigen::Vector3d::UnitZ());
-  Eigen::AngleAxisd pitch_angle(pitch, Eigen::Vector3d::UnitY());
-  Eigen::AngleAxisd yaw_angle(yaw, Eigen::Vector3d::UnitZ());
-  Eigen::Quaternion<double> q = roll_angle * pitch_angle * yaw_angle;
-  return q;
-}
-
-Eigen::Matrix4d
-terrain_slam::TerrainSlam::buildTransform(const Eigen::Quaternion<double> q,
-                                          const Eigen::Vector3d t) {
-  Eigen::Matrix3d R = q.matrix();
-  Eigen::Matrix4d T;
-  // Set to Identity to make bottom row of Matrix 0,0,0,1
-  T.setIdentity();
-  T.block<3, 3>(0, 0) = R;
-  T(0, 3) = t(0);
-  T(1, 3) = t(1);
-  T(2, 3) = t(2);
-  return T;
-}
-
-void terrain_slam::TerrainSlam::cv2eigen(const cv::Point3d &p,
-                                         Eigen::Vector3d &v) {
-  v(0) = p.x;
-  v(1) = p.y;
-  v(2) = p.z;
+  if (cloud_names.size() == 0) {
+    std::cout << "No clouds found. Aborting... " << std::endl;
+    return false;
+  } else {
+    std::cout << "Found " << cloud_names.size() << " clouds!" << std::endl;
+    return true;
+  }
 }
 
 void terrain_slam::TerrainSlam::readFiles(const vector<string> &cloud_names,
                                           const vector<string> &cloud_paths) {
-  clouds_.clear();
-  robot_tf_.clear();
-  camera_tf_.clear();
-
-  clouds_.resize(cloud_paths.size());
-  robot_tf_.resize(cloud_paths.size());
-  camera_tf_.resize(cloud_paths.size());
-
   std::cout << "Reading clouds... " << std::endl;
-#pragma omp parallel for
   for (size_t i = 0; i < cloud_paths.size(); i++) {
     FileStorage fs;
     fs.open(cloud_paths[i], FileStorage::READ);
+
     if (fs.isOpened()) {
-      // cout << "File found! " << cloud_names[i] << endl;
       std::vector<cv::Point3d> points;
       cv::Point3d robot_position, robot_orientation, camera_position,
           camera_orientation;
@@ -256,28 +152,15 @@ void terrain_slam::TerrainSlam::readFiles(const vector<string> &cloud_names,
       fs["robot_orientation"] >> robot_orientation;
       fs["camera_position"] >> camera_position;
       fs["camera_orientation"] >> camera_orientation;
-      clouds_[i].resize(points.size());
+
+      int num_points = points.size();
+      Eigen::Vector3d xyz = cv2eigen(robot_position);
+      Eigen::Vector3d rpy = cv2eigen(robot_orientation) * M_PI / 180.0;
+      LaserLine line(num_points, xyz, rpy);
       for (size_t j = 0; j < points.size(); j++) {
-        cv2eigen(points[j], clouds_[i][j]);
+        line.add(cv2eigen(points[j]), j);
       }
-
-      Eigen::Quaternion<double> q;
-      Eigen::Vector3d t;
-
-      // Compute transformation matrix for robot
-      q = rpyToRotationMatrix(robot_orientation.x * M_PI / 180.0,
-                              robot_orientation.y * M_PI / 180.0,
-                              robot_orientation.z * M_PI / 180.0);
-      t = Eigen::Vector3d(robot_position.x, robot_position.y, robot_position.z);
-      robot_tf_[i] = buildTransform(q, t);
-
-      // Compute transformpation matrix for camera
-      q = rpyToRotationMatrix(camera_orientation.x * M_PI / 180.0,
-                              camera_orientation.y * M_PI / 180.0,
-                              camera_orientation.z * M_PI / 180.0);
-      t = Eigen::Vector3d(camera_position.x, camera_position.y,
-                          camera_position.z);
-      camera_tf_[i] = buildTransform(q, t);
+      lines_.push_back(line);
     } else {
       cout << "Unable to open camera pose file at " << cloud_paths[i]
            << ".  Please verify the path." << endl;
@@ -286,45 +169,40 @@ void terrain_slam::TerrainSlam::readFiles(const vector<string> &cloud_names,
   std::cout << "Clouds loaded! " << std::endl;
 }
 
-bool terrain_slam::TerrainSlam::cvToCGAL(const Mat &in, vector<Aff3> &out) {
-  out.clear();
+void terrain_slam::TerrainSlam::processPatches() {
+  double distance = 0;
+  int pivot_idx = 0;
 
-  // in Matrix contains (x, y, z, roll, pitch, yaw) in meters and degrees
-  for (size_t i = 0; i < in.rows; i++) {
-    double x = in.at<double>(i, 0);
-    double y = in.at<double>(i, 1);
-    double z = in.at<double>(i, 2);
-    double roll = in.at<double>(i, 3) * M_PI / 180.0;
-    double pitch = in.at<double>(i, 4) * M_PI / 180.0;
-    double yaw = in.at<double>(i, 5) * M_PI / 180.0;
+  std::cout << "Processing... " << std::endl;
+  for (size_t i = 0; i < lines_.size(); i++) {
+    // Accumulate clouds while distance is less than patch_size_
+    Eigen::Vector3d pos1 = lines_[pivot_idx].getPosition();
+    Eigen::Vector3d pos2 = lines_[i].getPosition();
+    Eigen::Vector3d diff = pos2 - pos1;
+    distance = diff.norm();
+    if (distance > patch_size_) {
 
-    double ci = cos(roll);
-    double cj = cos(pitch);
-    double ch = cos(yaw);
-    double si = sin(roll);
-    double sj = sin(pitch);
-    double sh = sin(yaw);
-    double cc = ci * ch;
-    double cs = ci * sh;
-    double sc = si * ch;
-    double ss = si * sh;
+      CloudPatch patch(lines_, pivot_idx, i);
+      patches_.push_back(patch);
 
-    double m00 = cj * ch;
-    double m01 = sj * sc - cs;
-    double m02 = sj * cc + ss;
-    double m10 = cj * sh;
-    double m11 = sj * ss + cc;
-    double m12 = sj * cs - sc;
-    double m20 = -sj;
-    double m21 = cj * si;
-    double m22 = cj * ci;
-    double m03 = x;
-    double m13 = y;
-    double m23 = z;
-    Aff3 tf(m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23);
-    out.push_back(tf);
+      savePatch(patch, pivot_idx);
+      pivot_idx = i + 1;
+    }
   }
-  return true;
+}
+
+// Save the patch with the position information
+void terrain_slam::TerrainSlam::savePatch(
+    const CloudPatch& patch, int idx) {
+  std::string path("../output");
+  boost::filesystem::path dir(path);
+  boost::filesystem::create_directory(dir);
+
+  std::ostringstream ss;
+  ss << std::setw(8) << std::setfill('0') << idx;
+  std::string cloud_filename = path + "/cloud" + ss.str() + ".ply";
+  std::cout << "Saving ply file " << cloud_filename << std::endl;
+  saver_.saveCloud(cloud_filename, patch.getPoints());
 }
 
 int main(int argc, char **argv) {
