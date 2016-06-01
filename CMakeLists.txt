@@ -114,13 +114,17 @@ FILE(GLOB_RECURSE MY_HEADERS include/*.h)
 # include for local directory
 include_directories(BEFORE include)
 
+add_library(statistical_outlier_remover src/statistical_outlier_remover.cpp)
+
 add_executable(terrain_slam src/terrain_slam.cpp ${MY_HEADERS})
 
 add_to_cached_list(CGAL_EXECUTABLE_TARGETS terrain_slam)
 
 # Link the executable to CGAL and third-party libraries
 target_link_libraries(terrain_slam  ${OpenCV_LIBRARIES}
-                                    ${Boost_LIBRARIES})
+                                    ${Boost_LIBRARIES}
+                                    ${libnabo_LIBRARIES}
+                                    statistical_outlier_remover)
 
 add_executable(simple_icp src/simple_icp.cpp ${MY_HEADERS})
 

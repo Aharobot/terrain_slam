@@ -21,12 +21,14 @@
 //  DEALINGS IN THE SOFTWARE.
 
 #include <terrain_slam/terrain_slam.h>
+#include <terrain_slam/statistical_outlier_remover.h>
 
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 #include <fstream>
 #include <iostream>
 #include <iomanip>
+#include <nabo/nabo.h>
 
 namespace po = boost::program_options;
 using namespace std;
@@ -171,6 +173,28 @@ void terrain_slam::TerrainSlam::readFiles(const vector<string> &cloud_names,
       for (size_t j = 0; j < points.size(); j++) {
         line.add(cv2eigen(points[j]), j);
       }
+
+      // Filter line, remove outliers
+      cout << "Filtering cloud " << cloud_names[i] << " with " << num_points << " points";
+      if (num_points > 10) {
+        StatisticalOutlierRemover sor;
+        sor.setInput(line.points);
+        sor.setMeanK(10);
+        sor.setStdThresh(3.0);
+        Eigen::MatrixXd output;
+        sor.filter(output);
+        line.points.resize(output.rows(), output.cols());
+        line.points = output;
+        if (num_points - line.points.cols() != 0) {
+          cout << " - removed " << num_points - output.cols() << endl;
+        } else {
+          cout << endl;
+        }
+      } else {
+        // if there are not enough points, skip the line
+        cout << " - SKIPPING" << endl;
+      }
+
       lines.push_back(line);
     } else {
       cout << "Unable to open camera pose file at " << cloud_paths[i]
@@ -206,9 +230,8 @@ terrain_slam::TerrainSlam::createPatches(
 
     if (robot_distance > patch_size_ || centroid_distance > 10.0 || i == lines.size() - 1) {
       CloudPatch patch(lines, pivot_idx, i);
-      patches.push_back(patch);
-
       savePatch(patch, patch_idx);
+      patches.push_back(patch);
       pivot_idx = i + 1;
       patch_idx++;
     }
@@ -242,8 +265,23 @@ terrain_slam::TerrainSlam::lookForCandidates(
       Eigen::Vector3d cj = patches[j].getCentroid();
       Eigen::Vector3d diff = ci - cj;
       double distance = diff.norm();
-      if (distance < 1.5)
-        std::cout << "Between " << i << " and " << j << " distance: " << distance << std::endl;
+      if (distance < 3.0) {
+        cout << "Between " << i << " and " << j
+             << " distance: " << distance << endl;
+        // Search nearest neighbours
+        Eigen::MatrixXd M = patches[i].points;
+        Eigen::MatrixXd q = patches[j].points;
+        Nabo::NNSearchD* nns = Nabo::NNSearchD::createKDTreeLinearHeap(M);
+        // Indices of the kNN points
+        Eigen::MatrixXi indices;
+        // L2 distance between the query and the kNN points
+        Eigen::MatrixXd dists2;
+        // the "k" of kNN, e.g. the number of nearest neighbours
+        int K = 5;
+        indices.resize(K, q.cols());
+        dists2.resize(K, q.cols());
+        nns->knn(q, indices, dists2, K, 0, Nabo::NNSearchF::SORT_RESULTS);
+      }
     }
   }
 }
