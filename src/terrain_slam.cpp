@@ -36,24 +36,31 @@ using namespace cv;
 
 terrain_slam::TerrainSlam::TerrainSlam(int argc, char **argv) {
   string clouds_dir;
-  double size = 5.0;
+  patch_size_ = 5.0;
+  mean_k_     = 10;
+  std_mult_   = 6.0;
+  debug_      = false;
+  filter_     = false;
 
-  bool success = parseCommandLine(argc, argv, clouds_dir, size);
-
-  if (success) {
-    process(clouds_dir, size);
+  if (parseCommandLine(argc, argv)) {
+    process();
   }
 }
 
-bool terrain_slam::TerrainSlam::parseCommandLine(
-    int argc, char **argv, string& clouds_dir, double& size) {
+bool terrain_slam::TerrainSlam::parseCommandLine(int argc, char **argv) {
   try {
     po::options_description description("Terrain Slam");
     description.add_options()("help,h", "Display this help message")(
         "clouds,c", po::value<string>(),
         "Input folder where the point clouds are")(
-        "size,s", po::value<double>()->default_value(size),
-        "Patch size in meters");
+        "size,s", po::value<double>()->default_value(patch_size_),
+        "Patch size in meters")(
+        "mean_k,k", po::value<double>()->default_value(mean_k_),
+        "Number for kNN (--filter)")(
+        "std_mult,m", po::value<double>()->default_value(std_mult_),
+        "Multiplier to stdev (--filter)")(
+        "debug,d", "Show debug prints")(
+        "filter,f", "Enable laser line outlier removal (Filtering)");
 
     po::variables_map vm;
     po::store(po::command_line_parser(argc, argv).options(description).run(),
@@ -63,12 +70,15 @@ bool terrain_slam::TerrainSlam::parseCommandLine(
     if (vm.count("help")) {
       cout << description;
     } else if (vm.count("clouds")) {
-      clouds_dir = vm["clouds"].as<string>();
-      if (vm.count("size"))
-        size = vm["size"].as<double>();
+      clouds_dir_ = vm["clouds"].as<string>();
+      if (vm.count("size"))     patch_size_ = vm["size"].as<double>();
+      if (vm.count("mean_k"))   mean_k_     = vm["mean_k"].as<double>();
+      if (vm.count("std_mult")) std_mult_   = vm["std_mult"].as<double>();
+      if (vm.count("debug"))    debug_      = true;
+      if (vm.count("filter"))   filter_     = true;
       cout.setf(ios::boolalpha);
       cout << "Running Terrain Slam with the following parameters:"
-           << "\n\t* Clouds directory  : " << clouds_dir << endl;
+           << "\n\t* Clouds directory  : " << clouds_dir_ << endl;
       return true;
     } else {
       cout << "REQUIRED arguments were not provided." << endl;
@@ -80,15 +90,11 @@ bool terrain_slam::TerrainSlam::parseCommandLine(
   return false;
 }
 
-void terrain_slam::TerrainSlam::process(const string &clouds_dir,
-                                        double size) {
-  // Set patch size
-  patch_size_ = size;
-
+void terrain_slam::TerrainSlam::process() {
   // Retrieve list of files
   vector<string> cloud_names;
   vector<string> cloud_paths;
-  bool files_found = getCloudPaths(clouds_dir, "yml", cloud_names, cloud_paths);
+  bool files_found = getCloudPaths(clouds_dir_, "yml", cloud_names, cloud_paths);
 
   if (files_found) {
     vector<LaserLine> lines;
@@ -148,11 +154,33 @@ bool terrain_slam::TerrainSlam::getCloudPaths(const string &path,
   }
 }
 
+// int terrain_slam::TerrainSlam::preprocessPoints(vector<cv::Point3d>& points, int idx = 0) {
+//   // we known that points are ordered from left to right in camera image
+//   int k = 0;
+//   for (size_t i = idx; i < points.size() - 1; i++) {
+//     cv::Point3d p = points[i];
+//     cv::Point3d q = points[i + 1];
+//     double delta_x = p.x - q.x;  // meters
+//     double delta_y = p.y - q.y;  // meters
+//     double delta_z = abs(p.z - q.z);  // meters
+//     double tan_slope = delta_z / sqrt(delta_x*delta_x + delta_y*delta_y);
+//     double max_slope_tan = tan(80.0*M_PI/180.);
+//     if (delta_z > 0.5 || tan_slope > max_slope_tan) {
+//       points.erase(points.begin() + i);
+//       k++;
+//       k += preprocessPoints(points, i - 1);
+//       break;
+//     }
+//   }
+//   return k;
+// }
+
 void terrain_slam::TerrainSlam::readFiles(const vector<string> &cloud_names,
                                           const vector<string> &cloud_paths,
                                           vector<LaserLine>& lines) {
   cout << "Reading clouds... " << endl;
   for (size_t i = 0; i < cloud_paths.size(); i++) {
+    if (debug_) cout << cloud_names[i] << " ";
     FileStorage fs;
     fs.open(cloud_paths[i], FileStorage::READ);
 
@@ -166,36 +194,41 @@ void terrain_slam::TerrainSlam::readFiles(const vector<string> &cloud_names,
       fs["camera_position"] >> camera_position;
       fs["camera_orientation"] >> camera_orientation;
 
-      int num_points = points.size();
-      Eigen::Vector3d xyz = cv2eigen(robot_position);
-      Eigen::Vector3d rpy = cv2eigen(robot_orientation) * M_PI / 180.0;
-      LaserLine line(num_points, xyz, rpy);
-      for (size_t j = 0; j < points.size(); j++) {
-        line.add(cv2eigen(points[j]), j);
-      }
+      // check points
+      if (debug_) cout << points.size() << " ";
+      // add only if there are points
+      if (points.size() > 0) {
+        // int k = 0;
+        // k = preprocessPoints(points);
+        // if (debug_) cout << k << " ";
 
-      // Filter line, remove outliers
-      cout << "Filtering cloud " << cloud_names[i] << " with " << num_points << " points";
-      if (num_points > 10) {
-        StatisticalOutlierRemover sor;
-        sor.setInput(line.points);
-        sor.setMeanK(10);
-        sor.setStdThresh(3.0);
-        Eigen::MatrixXd output;
-        sor.filter(output);
-        line.points.resize(output.rows(), output.cols());
-        line.points = output;
-        if (num_points - line.points.cols() != 0) {
-          cout << " - removed " << num_points - output.cols() << endl;
-        } else {
-          cout << endl;
+        Eigen::Vector3d xyz = cv2eigen(robot_position);
+        Eigen::Vector3d rpy = cv2eigen(robot_orientation) * M_PI / 180.0;
+        LaserLine line(points.size(), xyz, rpy);
+        for (size_t j = 0; j < points.size(); j++) {
+          line.add(cv2eigen(points[j]), j);
         }
-      } else {
-        // if there are not enough points, skip the line
-        cout << " - SKIPPING" << endl;
-      }
 
-      lines.push_back(line);
+        // Filter line, remove outliers
+        if (points.size() > 10 && filter_) {
+          StatisticalOutlierRemover sor;
+          sor.setInput(line.points);
+          sor.setMeanK(10);
+          sor.setStdThresh(3.0);
+          Eigen::MatrixXd output;
+          sor.filter(output);
+          line.points.resize(output.rows(), output.cols());
+          line.points = output;
+        }
+
+        if (debug_) cout << points.size() - line.points.cols() << " ";
+
+        lines.push_back(line);
+
+        if (debug_) cout << line.points.cols() << endl;
+      } else {
+        cout << "empty pointcloud in " << cloud_names[i] << endl;;
+      }
     } else {
       cout << "Unable to open camera pose file at " << cloud_paths[i]
            << ".  Please verify the path." << endl;

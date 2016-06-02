@@ -64,4 +64,7 @@ void terrain_slam::StatisticalOutlierRemover::filter(Eigen::MatrixXd &output) {
   // Resize vector to actual size
   removed_indices_.conservativeResize(nr_outliers);
   output.conservativeResize(input_.rows(), nr_inliers);
+
+  // cleanup kd-tree
+  delete nns;
 }

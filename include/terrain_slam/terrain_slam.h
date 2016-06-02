@@ -188,20 +188,15 @@ public:
    *
    * @param[in]  argc        The argc command line argument
    * @param      argv        The argv command line argument
-   * @param      clouds_dir  The clouds dir
-   * @param      size        The size of the patch
    *
    * @return     true if successful
    */
-  bool parseCommandLine(int argc, char **argv, std::string& clouds_dir, double& size);
+  bool parseCommandLine(int argc, char **argv);
 
   /**
    * @brief      Main process function
-   *
-   * @param[in]  clouds_dir  The clouds dir
-   * @param[in]  size        The size of the patches in meters
    */
-  void process(const std::string &clouds_dir, double size);
+  void process();
 
   /**
    * @brief      Reads files.
@@ -255,7 +250,14 @@ public:
   void lookForCandidates(const std::vector<CloudPatch>& patches,
                          std::vector<std::pair<int, int> >& candidates);
 
+  // int preprocessPoints(std::vector<cv::Point3d>& points, int idx);
+
+  std::string clouds_dir_;
   double patch_size_;
+  int mean_k_;
+  int std_mult_;
+  bool debug_;
+  bool filter_;
 
 }; // Class
 } // Namespace
