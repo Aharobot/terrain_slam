@@ -252,6 +252,8 @@ public:
 
   // int preprocessPoints(std::vector<cv::Point3d>& points, int idx);
 
+  Transform findTransform(const CloudPatch& c1, const CloudPatch& c2);
+
   std::string clouds_dir_;
   double patch_size_;
   int mean_k_;

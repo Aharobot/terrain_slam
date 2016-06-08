@@ -22,6 +22,7 @@
 
 #include <terrain_slam/terrain_slam.h>
 #include <terrain_slam/statistical_outlier_remover.h>
+#include <terrain_slam/gridder.h>
 
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
@@ -108,6 +109,14 @@ void terrain_slam::TerrainSlam::process() {
     // Search for overlapping patches
     vector<pair<int, int> > candidates;
     lookForCandidates(patches, candidates);
+
+    for (size_t i = 0; i < candidates.size(); i++) {
+      int id1 = candidates[i].first;
+      int id2 = candidates[i].second;
+      std::cout << "Find transform between " << id1 << " and " << id2 << std::endl;
+      findTransform(patches[id1], patches[id2]);
+      std::cout << "findTransform out" << std::endl;
+    }
   }
 }
 
@@ -227,7 +236,7 @@ void terrain_slam::TerrainSlam::readFiles(const vector<string> &cloud_names,
 
         if (debug_) cout << line.points.cols() << endl;
       } else {
-        cout << "empty pointcloud in " << cloud_names[i] << endl;;
+        cout << "[WARN]: Empty pointcloud in " << cloud_names[i] << endl;;
       }
     } else {
       cout << "Unable to open camera pose file at " << cloud_paths[i]
@@ -254,6 +263,15 @@ terrain_slam::TerrainSlam::createPatches(
     Eigen::Vector3d robot_diff = pos2 - pos1;
     robot_distance = robot_diff.norm();
 
+    bool jump = false;
+    if (i < lines.size() - 1) {
+      Eigen::Vector3d pos_b = lines[i + 1].getPosition();
+      Eigen::Vector3d robot_diff_prev = pos_b - pos2;
+      double d = robot_diff_prev.norm();
+      std::cout << "dist " << d << std::endl;
+      if (d > 0.5) jump = true;
+    }
+
     if (i < lines.size() - 1) {
       Eigen::Vector3d c1 = lines[i].getCentroid();
       Eigen::Vector3d c2 = lines[i + 1].getCentroid();
@@ -261,7 +279,7 @@ terrain_slam::TerrainSlam::createPatches(
       centroid_distance = centroid_diff.norm();
     }
 
-    if (robot_distance > patch_size_ || centroid_distance > 10.0 || i == lines.size() - 1) {
+    if (robot_distance > patch_size_ || centroid_distance > 10.0 || i == lines.size() - 1 || jump) {
       CloudPatch patch(lines, pivot_idx, i);
       savePatch(patch, patch_idx);
       patches.push_back(patch);
@@ -298,25 +316,26 @@ terrain_slam::TerrainSlam::lookForCandidates(
       Eigen::Vector3d cj = patches[j].getCentroid();
       Eigen::Vector3d diff = ci - cj;
       double distance = diff.norm();
-      if (distance < 3.0) {
+      if (distance < 5.0) {
         cout << "Between " << i << " and " << j
              << " distance: " << distance << endl;
-        // Search nearest neighbours
-        Eigen::MatrixXd M = patches[i].points;
-        Eigen::MatrixXd q = patches[j].points;
-        Nabo::NNSearchD* nns = Nabo::NNSearchD::createKDTreeLinearHeap(M);
-        // Indices of the kNN points
-        Eigen::MatrixXi indices;
-        // L2 distance between the query and the kNN points
-        Eigen::MatrixXd dists2;
-        // the "k" of kNN, e.g. the number of nearest neighbours
-        int K = 5;
-        indices.resize(K, q.cols());
-        dists2.resize(K, q.cols());
-        nns->knn(q, indices, dists2, K, 0, Nabo::NNSearchF::SORT_RESULTS);
+        pair<int, int> p = make_pair(i, j);
+        candidates.push_back(p);
       }
     }
   }
+}
+
+terrain_slam::Transform
+terrain_slam::TerrainSlam::findTransform(const CloudPatch& c1,
+                                         const CloudPatch& c2) {
+  std::cout << "Creating gridder... " << std::endl;
+  terrain_slam::Gridder g(0.2);
+  std::cout << "Setting input... " << std::endl;
+  g.setInput(c1.points);
+  std::cout << "Gridding... " << std::endl;
+  Eigen::Matrix3Xd c1_gridded = g.grid();
+  std::cout << "Gridding done" << std::endl;
 }
 
 int main(int argc, char **argv) {
