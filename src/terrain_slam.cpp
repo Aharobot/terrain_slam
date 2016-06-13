@@ -21,22 +21,20 @@
 //  DEALINGS IN THE SOFTWARE.
 
 #include <terrain_slam/terrain_slam.h>
-#include <terrain_slam/statistical_outlier_remover.h>
-#include <terrain_slam/gridder.h>
+#include <terrain_slam/outlier_remover.h>
 
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
+#include <boost/shared_ptr.hpp>
 #include <fstream>
 #include <iostream>
 #include <iomanip>
-#include <nabo/nabo.h>
 
 namespace po = boost::program_options;
 using namespace std;
 using namespace cv;
 
 terrain_slam::TerrainSlam::TerrainSlam(int argc, char **argv) {
-  string clouds_dir;
   patch_size_ = 5.0;
   mean_k_     = 10;
   std_mult_   = 6.0;
@@ -103,7 +101,7 @@ void terrain_slam::TerrainSlam::process() {
     readFiles(cloud_names, cloud_paths, lines);
 
     // Create required length patches
-    vector<CloudPatch> patches;
+    vector<CloudPatchPtr> patches;
     createPatches(lines, patches);
 
     // Search for overlapping patches
@@ -114,8 +112,7 @@ void terrain_slam::TerrainSlam::process() {
       int id1 = candidates[i].first;
       int id2 = candidates[i].second;
       std::cout << "Find transform between " << id1 << " and " << id2 << std::endl;
-      findTransform(patches[id1], patches[id2]);
-      std::cout << "findTransform out" << std::endl;
+      findTransform(patches, id1, id2);
     }
   }
 }
@@ -220,7 +217,7 @@ void terrain_slam::TerrainSlam::readFiles(const vector<string> &cloud_names,
 
         // Filter line, remove outliers
         if (points.size() > 10 && filter_) {
-          StatisticalOutlierRemover sor;
+          OutlierRemover sor;
           sor.setInput(line.points);
           sor.setMeanK(10);
           sor.setStdThresh(3.0);
@@ -248,7 +245,7 @@ void terrain_slam::TerrainSlam::readFiles(const vector<string> &cloud_names,
 
 void
 terrain_slam::TerrainSlam::createPatches(
-    const vector<LaserLine>& lines, vector<CloudPatch>& patches) {
+    const vector<LaserLine>& lines, vector<CloudPatchPtr>& patches) {
   double robot_distance  = 0;
   double centroid_distance = 0;
   int pivot_idx = 0;
@@ -268,7 +265,6 @@ terrain_slam::TerrainSlam::createPatches(
       Eigen::Vector3d pos_b = lines[i + 1].getPosition();
       Eigen::Vector3d robot_diff_prev = pos_b - pos2;
       double d = robot_diff_prev.norm();
-      std::cout << "dist " << d << std::endl;
       if (d > 0.5) jump = true;
     }
 
@@ -280,8 +276,8 @@ terrain_slam::TerrainSlam::createPatches(
     }
 
     if (robot_distance > patch_size_ || centroid_distance > 10.0 || i == lines.size() - 1 || jump) {
-      CloudPatch patch(lines, pivot_idx, i);
-      savePatch(patch, patch_idx);
+      CloudPatchPtr patch(new CloudPatch(lines, pivot_idx, i));
+      // savePatch(patch, patch_idx);
       patches.push_back(patch);
       pivot_idx = i + 1;
       patch_idx++;
@@ -291,7 +287,7 @@ terrain_slam::TerrainSlam::createPatches(
 
 // Save the patch with the position information
 void terrain_slam::TerrainSlam::savePatch(
-    const CloudPatch& patch, int idx) {
+    const CloudPatchPtr& patch, int idx) {
   string path("../output");
   boost::filesystem::path dir(path);
   boost::filesystem::create_directory(dir);
@@ -301,19 +297,19 @@ void terrain_slam::TerrainSlam::savePatch(
   string cloud_filename = path + "/cloud" + ss.str() + ".ply";
   cout << "Saving ply file " << cloud_filename << endl;
   PlySaver saver;
-  saver.saveCloud(cloud_filename, patch.getPoints());
+  saver.saveCloud(cloud_filename, patch->getPoints());
 }
 
 
 void
 terrain_slam::TerrainSlam::lookForCandidates(
-    const vector<CloudPatch>& patches,
+    const vector<CloudPatchPtr>& patches,
     vector<pair<int, int> >& candidates) {
   cout << "Looking for candidates... " << endl;
   for (size_t i = 0; i < patches.size(); i++) {
     for (size_t j = i + 1; j < patches.size(); j++) {
-      Eigen::Vector3d ci = patches[i].getCentroid();
-      Eigen::Vector3d cj = patches[j].getCentroid();
+      Eigen::Vector3d ci = patches.at(i)->getCentroid();
+      Eigen::Vector3d cj = patches.at(j)->getCentroid();
       Eigen::Vector3d diff = ci - cj;
       double distance = diff.norm();
       if (distance < 5.0) {
@@ -327,18 +323,36 @@ terrain_slam::TerrainSlam::lookForCandidates(
 }
 
 terrain_slam::Transform
-terrain_slam::TerrainSlam::findTransform(const CloudPatch& c1,
-                                         const CloudPatch& c2) {
-  std::cout << "Creating gridder... " << std::endl;
-  terrain_slam::Gridder g(0.2);
-  std::cout << "Setting input... " << std::endl;
-  g.setInput(c1.points);
-  std::cout << "Gridding... " << std::endl;
-  Eigen::Matrix3Xd c1_gridded = g.grid();
-  std::cout << "Gridding done" << std::endl;
+terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
+                                         int id1,
+                                         int id2) {
+  c.at(id1)->grid();
+  c.at(id2)->grid();
+
+  // Save clouds
+  // string path("../grids");
+  // boost::filesystem::path dir(path);
+  // boost::filesystem::create_directory(dir);
+
+  // ostringstream ss;
+  // ss << setw(4) << setfill('0') << id1;
+  // string cloud_filename = path + "/cloud" + ss.str() + ".ply";
+  // cout << "Saving ply file " << cloud_filename
+  //      << " with " << c1_gridded.cols() << " points" << endl;
+  // PlySaver saver;
+  // saver.saveCloud(cloud_filename, c1_gridded);
+
+  // Adjust
+  std::cout << "Adjusting " << id1 << " to " << id2 << "..." << std::endl;
+  adj_ = new Adjuster();
+  boost::shared_ptr<CloudPatch> c1(c.at(id1));
+  boost::shared_ptr<CloudPatch> c2(c.at(id2));
+  adj_->adjust(c1, c2);
+  std::cout << "Done!" << std::endl;
 }
 
 int main(int argc, char **argv) {
+  google::InitGoogleLogging(argv[0]);
   terrain_slam::TerrainSlam tslam(argc, argv);
   return 0;
 }

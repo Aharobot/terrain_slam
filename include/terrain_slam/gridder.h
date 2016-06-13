@@ -1,3 +1,26 @@
+// The MIT License (MIT)
+
+// Copyright (c) 2016 Miquel Massot Campos
+
+//  Permission is hereby granted, free of charge, to any person obtaining a
+//  copy of this software and associated documentation files (the "Software"),
+//  to deal in the Software without restriction, including without limitation
+//  the rights to use, copy, modify, merge, publish, distribute, sublicense,
+//  and/or sell copies of the Software, and to permit persons to whom the
+//  Software is furnished to do so, subject to the following conditions:
+//
+//  The above copyright notice and this permission notice shall be included in
+//  all copies or substantial portions of the Software.
+//
+//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+//  OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+//  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+//  DEALINGS IN THE SOFTWARE.
+
+
 #ifndef GRIDDER_H
 #define GRIDDER_H
 
@@ -12,17 +35,19 @@ public:
   /**
    * @brief      Default constructor
    */
-  Gridder() : init_(false), resolution_(0.2) {
+  Gridder() : init_(false), resolution_(0.2), search_radius_(0.4) {
     // empty constructor
   }
 
   /**
    * @brief      Constructor
    *
-   * @param[in]  resolution  The resolution
+   * @param[in]  resolution     The resolution
+   * @param[in]  search_radius  The search radius
    */
-  Gridder(double resolution) {
+  Gridder(double resolution, double search_radius) {
     setResolution(resolution);
+    setSearchRadius(search_radius);
   }
 
   /**
@@ -35,13 +60,12 @@ public:
   }
 
   /**
-   * @brief      Sets the input cloud.
+   * @brief      Sets the search radius.
    *
-   * @param[in]  points  The pointcoud
+   * @param[in]  resolution  The search radius
    */
-  inline void setInput(const Eigen::Matrix4Xd &points) {
-    Eigen::Matrix3Xd temp = points.topRows(3);
-    setInput(temp);
+  void setSearchRadius(double search_radius) {
+    search_radius_ = search_radius;
   }
 
   /**
@@ -49,7 +73,7 @@ public:
    *
    * @param[in]  points  The pointcloud
    */
-  inline void setInput(const Eigen::Matrix3Xd &points) {
+  inline void setInput(const Eigen::Matrix4Xd &points) {
     points_ = points;
     init_ = true;
   }
@@ -60,63 +84,71 @@ public:
    *
    * @return     Gridded pointcloud
    */
-  Eigen::Matrix3Xd grid() {
+  Eigen::Matrix4Xd grid() {
     if (!init_) {
       std::cerr << "[Gridder]: Input pointcloud not set" << std::endl;
     }
 
     double min_x, min_y, max_x, max_y;
-    getMinMax(min_x, min_y, max_x, max_y);
+    bool ok = getMinMax(min_x, min_y, max_x, max_y);
+    if (!ok) {
+      std::cout << "KKKKKKKKKKKKKKKKKKKKKKKKKKKKKK" << std::endl;
+    }
 
-    std::cout << "Limits from (" << min_x << ", " << min_y << ") to ("
-                                << max_x << ", " << max_y << ") "
-                                << std::endl;
+    // std::cout << "Limits from (" << min_x << ", " << min_y << ") to ("
+    //                             << max_x << ", " << max_y << ") "
+    //                             << std::endl;
 
     // Round to nearest divisible by resolution
-    min_x = resolution_ * static_cast<int>(min_x / resolution_);
-    min_y = resolution_ * static_cast<int>(min_y / resolution_);
-    max_x = resolution_ * static_cast<int>(max_x / resolution_);
-    max_y = resolution_ * static_cast<int>(max_y / resolution_);
+    min_x = resolution_ * static_cast<int>((min_x - resolution_/2) / resolution_);
+    min_y = resolution_ * static_cast<int>((min_y - resolution_/2) / resolution_);
+    max_x = resolution_ * static_cast<int>((max_x + resolution_/2) / resolution_);
+    max_y = resolution_ * static_cast<int>((max_y + resolution_/2) / resolution_);
 
-    std::cout << "Range from (" << min_x << ", " << min_y << ") to ("
-                                << max_x << ", " << max_y << ") "
-                                << "with a resolution of " << resolution_
-                                << std::endl;
     double size_x = max_x - min_x;
     double size_y = max_y - min_y;
-    int grid_size_x = static_cast<int>(size_x / resolution_ + 1.0);
-    int grid_size_y = static_cast<int>(size_y / resolution_ + 1.0);
+    int grid_size_x = static_cast<int>(size_x / resolution_);
+    int grid_size_y = static_cast<int>(size_y / resolution_);
     int points_size = grid_size_x * grid_size_y;
 
-    Eigen::Matrix3Xd m(3, points_size);
+    // std::cout << "Range from (" << min_x << ", " << min_y << ") to ("
+    //                             << max_x << ", " << max_y << ") "
+    //                             << "with a resolution of " << resolution_
+    //                             << " size of " << grid_size_x << "x"
+    //                             << grid_size_y << std::endl;
+
+    Eigen::Matrix3Xd m = Eigen::Matrix3Xd::Zero(3, points_size);
 
     // resample points to resolution
     for (size_t i = 0; i < grid_size_x; i++) {
       double x_coord = min_x + resolution_*i;
       for (size_t j = 0; j < grid_size_y; j++) {
         double y_coord = min_y + resolution_*j;
-        Eigen::Vector3d p = reduce(x_coord, y_coord, resolution_);
-        m.col(i*grid_size_x + j) = p;
+        Eigen::Vector3d p = reduce(x_coord, y_coord, search_radius_);
+        m.col(i*grid_size_y + j) = p;
       }
     }
+    // std::cout << "m.col(0) " << m.col(0).transpose() << std::endl;
 
-    // Remove zero columns
-    for (size_t i = 0; i < m.cols(); i++) {
-      if (m.col(i).sum() == 0) {
-        // Remove current row
-        m.block(i, 0, m.rows()-i, m.cols()) = m.block(i + 1 , 0, m.rows()-i, m.cols());
-        m.conservativeResize(m.rows(),m.cols());
-      }
-    }
-    return m;
+    // // Remove zero columns
+    // for (size_t i = 0; i < m.cols(); i++) {
+    //   if (m.col(i).sum() == 0) {
+    //     // Remove current row
+    //     m.block(i, 0, m.rows()-i, m.cols()) = m.block(i + 1 , 0, m.rows()-i, m.cols());
+    //     m.conservativeResize(m.rows(), m.cols());
+    //   }
+    // }
+    // std::cout << "m.col(0) " << m.col(0).transpose() << std::endl;
+    return m.colwise().homogeneous();
   }
 
 
 
 private:
   bool init_;
-  Eigen::Matrix3Xd points_;
+  Eigen::Matrix4Xd points_;
   double resolution_;
+  double search_radius_;
 
   /**
    * @brief      Gets the minimum and maximum coordinates of the cloud
@@ -135,7 +167,7 @@ private:
     max_y = points_(0, 1);
 
     for (size_t i = 0; i < points_.cols(); i++) {
-      Eigen::Vector3d v = points_.col(i);
+      Eigen::Vector4d v = points_.col(i);
       double vx = v(0);
       double vy = v(1);
       if (vx > max_x) {
@@ -150,7 +182,7 @@ private:
         min_y = vy;
       }
     }
-    if ((min_x =! max_x) && (min_y =! max_y)) {
+    if ((min_x != max_x) && (min_y != max_y)) {
       return true;
     } else {
       return false;
@@ -168,7 +200,9 @@ private:
    * @return     A point at \f$(x, y, z)\f$, where the \f$z\f$ has been computed using
    * weighted mean.
    */
-  Eigen::Vector3d reduce(double x, double y, double distance) {
+  Eigen::Vector3d reduce(const double &x,
+                         const double &y,
+                         const double &distance) {
     // 2D query point
     Eigen::Vector2d c(x, y);
     // 2D point cloud
@@ -176,10 +210,11 @@ private:
     // Compute distance from c to all points
     Eigen::VectorXd sq_d = (p_xy.colwise() - c).colwise().squaredNorm();
 
-    if (sq_d.size() == 0) {
-      std::cout << "[ERROR]: There are no points from ("
+    if (sq_d.size() < 3) {
+      std::cout << "[WARN]: There are not enough points from ("
                 << x << ", " << y << ") within distance: "
                 << distance << std::endl;
+      return Eigen::Vector3d(0, 0, 0);
     }
 
     // Use weighted mean to compute Z
@@ -190,14 +225,15 @@ private:
     int cnt = 0;
     for (size_t i = 0; i < sq_d.size(); i++) {
       if (sq_d(i) < distance) {
-        // std::cout << "KKKKK " << std::endl;
         z += points_(2, i)/sq_d(i);
         d += 1/sq_d(i);
         cnt++;
       }
     }
 
-    if (d == 0) {
+    // TODO get rid of extrapolated points
+
+    if (d == 0 || cnt < 3) {
       // std::cout << "[WARN]: Distance is zero! " << cnt << " points visited" << std::endl;
       return Eigen::Vector3d(0, 0, 0);
     } else {
