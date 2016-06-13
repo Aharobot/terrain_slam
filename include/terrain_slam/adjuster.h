@@ -101,27 +101,11 @@ public:
     Eigen::Vector4d pt = inv_T * T * p;
 
     // Find three closest points in cloud
-    Eigen::VectorXd distances = (grid.colwise() - pt).colwise().squaredNorm();
-    std::cout << "distances " << distances.transpose() << std::endl;
-    int idx1, idx2, idx3;
-    idx1 = 0;
-    idx2 = 0;
-    idx3 = 0;
-    for (size_t i; i < distances.size(); i++) {
-      if (distances(i) < distances(idx1)) {
-        // std::cout << "distance " << distances(i) << std::endl;
-        idx1 = i;
-        idx2 = idx1;
-        idx3 = idx2;
-      }
-    }
+    std::vector<Eigen::Vector4d> nn = c_->kNN(pt, 3);
 
-    // check that we have got three points
-    if (idx2 < 0 || idx3 < 0) return false;
-
-    Eigen::Vector3d p1(grid.col(idx1).hnormalized());
-    Eigen::Vector3d p2(grid.col(idx2).hnormalized());
-    Eigen::Vector3d p3(grid.col(idx3).hnormalized());
+    Eigen::Vector3d p1(nn.at(0).hnormalized());
+    Eigen::Vector3d p2(nn.at(1).hnormalized());
+    Eigen::Vector3d p3(nn.at(2).hnormalized());
 
     // Calculate distance to plane
     Eigen::Vector3d v1 = p1 - p2;

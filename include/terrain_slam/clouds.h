@@ -26,6 +26,7 @@
 #include <terrain_slam/ply_saver.h>
 #include <terrain_slam/gridder.h>
 
+#include <boost/shared_ptr.hpp>
 #include <Eigen/Geometry>
 #include <opencv2/opencv.hpp>
 #include <nabo/nabo.h>
@@ -173,13 +174,26 @@ public:
       terrain_slam::Gridder g(resolution, search_radius);
       g.setInput(points);
       grid_ = g.grid();
-      Nabo::NNSearchD *nns = Nabo::NNSearchD::createKDTreeLinearHeap(grid_);
+      nns_.reset(Nabo::NNSearchD::createKDTreeLinearHeap(grid_));
       gridded_ = true;
     }
   }
 
   Eigen::Matrix4Xd getGrid() const {
     return grid_;
+  }
+
+  std::vector<Eigen::Vector4d> kNN(const Eigen::Vector4d& q, int k) const {
+    Eigen::VectorXi indices(k);
+    Eigen::VectorXd dists2(k);
+
+    nns_->knn(q, indices, dists2, k);
+    std::vector<Eigen::Vector4d> nn;
+
+    for (size_t i = 0; i < k; i++) {
+      nn.push_back(grid_.col(indices(i)));
+    }
+    return nn;
   }
 
   Eigen::Matrix4Xd getPoints(bool local_coordinate_frame = false) const {
@@ -210,6 +224,7 @@ protected:
   int end_idx_;
   std::vector<LaserLine> lines_;
   Eigen::MatrixXd grid_;
+  boost::shared_ptr<Nabo::NNSearchD> nns_;
 
   Eigen::Matrix4Xd transform(const LaserLine& line) {
     Eigen::Matrix4Xd m(line.points.rows(), line.points.cols());

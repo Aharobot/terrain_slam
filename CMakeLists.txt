@@ -90,14 +90,6 @@ if (OPENMP_FOUND)
 endif()
 
 #--------------------
-# DEPENDENCY: libpointmatcher
-#--------------------
-find_package(libpointmatcher REQUIRED HINTS "/usr/local/lib/")
-message("-- libpointmatcher found, version ${libpointmatcher_VERSION}")
-include_directories(${libpointmatcher_INCLUDE_DIRS})
-set(EXTERNAL_LIBS ${EXTERNAL_LIBS} ${libpointmatcher_LIBRARIES})
-
-#--------------------
 # DEPENDENCY: eigen 3
 #--------------------
 find_package(Eigen3 REQUIRED)
@@ -137,7 +129,3 @@ target_link_libraries(terrain_slam  ${OpenCV_LIBRARIES}
                                     ${Boost_LIBRARIES}
                                     outlier_remover
                                     adjuster)
-
-add_executable(simple_icp src/simple_icp.cpp ${MY_HEADERS})
-
-target_link_libraries(simple_icp ${libpointmatcher_LIBRARIES})
