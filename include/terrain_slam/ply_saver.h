@@ -80,7 +80,7 @@ private:
   }
 
   void writePoint(std::ofstream &file, const Eigen::Vector3d &p) {
-    if (isnan(p(0)) || isnan(p(1)) || isnan(p(2))) {
+    if (std::isnan(p(0)) || std::isnan(p(1)) || std::isnan(p(2))) {
       nan_counter_++;
     } else {
       file << p(0) << " " << p(1) << " " << p(2) << "\n";

@@ -1,9 +1,10 @@
 # Created by the script cgal_create_cmake_script_with_options
 # This is the CMake script for compiling a set of CGAL applications.
-
-project( terrain_slam )
+project( terrain_slam CXX )
 
 cmake_minimum_required(VERSION 2.6.2)
+# set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
+
 if("${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}" VERSION_GREATER 2.6)
   if("${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}.${CMAKE_PATCH_VERSION}" VERSION_GREATER 2.8.3)
     cmake_policy(VERSION 2.8.4)
@@ -20,93 +21,58 @@ endif()
 # initially
 set(EXTERNAL_LIBS "")
 
-#--------------------
-# DEPENDENCY: CGAL
-#--------------------
-# CGAL and its components
-find_package( CGAL QUIET COMPONENTS  HINTS "/usr/local/lib/" "C:/Program Files/CGAL-4.3/build/")
-message("-- CGAL found, version ${CGAL_VERSION}")
-set(EXTERNAL_LIBS ${EXTERNAL_LIBS} ${CGAL_LIBRARIES} ${CGAL_3RD_PARTY_LIBRARIES})
-# include helper file
-include( ${CGAL_USE_FILE} )
-
-#--------------------
-# DEPENDENCY: Boost
-#--------------------
-# Boost and its components
-find_package( Boost REQUIRED COMPONENTS filesystem thread program_options system graph)
-message("-- Boost found, version ${Boost_VERSION}")
-add_definitions("-DBOOST_VARIANT_USE_RELAXED_GET_BY_DEFAULT")
-set(EXTERNAL_LIBS ${EXTERNAL_LIBS} ${Boost_LIBRARIES})
-
-#--------------------
-# DEPENDENCY: OpenCV
-#--------------------
+# find_package(CGAL QUIET COMPONENTS  HINTS "/usr/local/lib/" "C:/Program Files/CGAL-4.3/build/")
+find_package(Boost REQUIRED COMPONENTS filesystem thread program_options system graph)
 find_package(OpenCV REQUIRED HINTS "/opt/ros/kinetic")
-message("-- OpenCV found, version ${OpenCV_VERSION}")
-include_directories(${OpenCV_INCLUDE_DIRS})
-set(EXTERNAL_LIBS ${EXTERNAL_LIBS} ${OpenCV_LIBRARIES})
-
-#--------------------
-# DEPENDENCY: GDAL
-#--------------------
-find_package(GDAL REQUIRED)
-message("-- GDAL found, version ${GDAL_VERSION}")
-include_directories(${GDAL_INCLUDE_DIRS})
-set(EXTERNAL_LIBS ${EXTERNAL_LIBS} ${GDAL_LIBRARIES})
-
-#--------------------
-# DEPENDENCY: GMP
-#--------------------
-find_package(GMP REQUIRED)
-message("-- GMP found, version ${GMP_VERSION}")
-include_directories(${GMP_INCLUDE_DIRS})
-set(EXTERNAL_LIBS ${EXTERNAL_LIBS} ${GMP_LIBRARIES})
-
-#--------------------
-# DEPENDENCY: MPFR
-#--------------------
-find_package(MPFR REQUIRED)
-message("-- MPFR found, version ${MPFR_VERSION}")
-include_directories(${MPFR_INCLUDE_DIRS})
-set(EXTERNAL_LIBS ${EXTERNAL_LIBS} ${MPFR_LIBRARIES})
-
-#--------------------
-# DEPENDENCY: Ceres
-#--------------------
+# find_package(GDAL REQUIRED)
 find_package(Ceres REQUIRED)
-message("-- CERES found, version ${CERES_VERSION}")
-include_directories(${CERES_INCLUDE_DIRS})
-set(EXTERNAL_LIBS ${EXTERNAL_LIBS} ${CERES_LIBRARIES})
-
-#--------------------
-# DEPENDENCY: OpenMP
-#--------------------
 find_package(OpenMP)
+find_package(G2O REQUIRED)
+find_package(SuiteSparse REQUIRED)
+find_package(Cholmod REQUIRED)
+find_package(libnabo REQUIRED)
+
 if (OPENMP_FOUND)
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
     message("-- OpenMP found, version ${OpenMP_VERSION}")
 endif()
 
-#--------------------
-# DEPENDENCY: eigen 3
-#--------------------
-find_package(Eigen3 REQUIRED)
-message("-- eigen3 found, version ${Eigen3_VERSION}")
-include_directories(${Eigen3_INCLUDE_DIR})
-#note: no library to add, eigen rely only on headers
+# include helper file
+# include( ${CGAL_USE_FILE} )
 
-#--------------------
-# DEPENDENCY: nabo
-#--------------------
-find_package(libnabo REQUIRED)
-include_directories(${libnabo_INCLUDE_DIRS})
-message("-- libnabo found, version ${libnabo_VERSION}")
-IF( NOT EIGEN3_INCLUDE_DIR )
-    MESSAGE( FATAL_ERROR "Please point the environment variable EIGEN3_INCLUDE_DIR to the include directory of your Eigen3 installation.")
-ENDIF()
-set(EXTERNAL_LIBS ${EXTERNAL_LIBS} ${libnabo_LIBRARIES})
+# ${CGAL_LIBRARIES} ${CGAL_3RD_PARTY_LIBRARIES}
+# ${GDAL_LIBRARIES}
+
+
+include_directories(${OpenCV_INCLUDE_DIRS}
+                    # ${GDAL_INCLUDE_DIRS}
+                    ${CERES_INCLUDE_DIRS}
+                    ${G2O_INCLUDE_DIRS}
+                    ${SUITESPARSE_INCLUDE_DIRS}
+                    ${Eigen3_INCLUDE_DIR}
+                    ${libnabo_INCLUDE_DIRS}
+                    ${CHOLMOD_INCLUDE_DIR})
+
+set(g2o_LIBRARIES
+    ${G2O_SOLVER_CHOLMOD}
+    ${G2O_SOLVER_CSPARSE}
+    ${G2O_SOLVER_CSPARSE_EXTENSION}
+    ${G2O_SOLVER_DENSE}
+    ${G2O_SOLVER_PCG}
+    ${G2O_SOLVER_SLAM2D_LINEAR}
+    ${G2O_SOLVER_STRUCTURE_ONLY}
+    ${G2O_SOLVER_EIGEN}
+    ${G2O_STUFF_LIBRARY}
+    ${G2O_CORE_LIBRARY}
+    ${G2O_CLI_LIBRARY}
+    ${G2O_TYPES_DATA}
+    ${G2O_TYPES_ICP}
+    ${G2O_TYPES_SBA}
+    ${G2O_TYPES_SCLAM2D}
+    ${G2O_TYPES_SIM3}
+    ${G2O_TYPES_SLAM2D}
+    ${G2O_TYPES_SLAM3D})
 
 # Workaround for MSCV - show includes in project
 FILE(GLOB_RECURSE MY_HEADERS include/*.h)
@@ -123,13 +89,26 @@ target_link_libraries(adjuster ${CERES_LIBRARIES})
 add_library(gridder src/gridder.cpp)
 target_link_libraries(gridder ${CERES_LIBRARIES})
 
-add_executable(terrain_slam src/terrain_slam.cpp src/clouds.cpp ${MY_HEADERS})
+add_library(graph src/graph.cpp)
+target_link_libraries(graph ${g2o_LIBRARIES})
 
-add_to_cached_list(CGAL_EXECUTABLE_TARGETS terrain_slam)
+add_executable(terrain_slam src/terrain_slam.cpp
+                            src/clouds.cpp
+                            ${MY_HEADERS})
+
+# add_to_cached_list(CGAL_EXECUTABLE_TARGETS terrain_slam)
 
 # Link the executable to CGAL and third-party libraries
 target_link_libraries(terrain_slam  ${OpenCV_LIBRARIES}
                                     ${Boost_LIBRARIES}
+                                    ${SUITESPARSE_LIBRARIES}
+                                    ${g2o_LIBRARIES}
+                                    cholmod
                                     outlier_remover
                                     adjuster
+                                    graph
                                     gridder)
+set_property(TARGET graph PROPERTY CXX_STANDARD 11)
+set_property(TARGET graph PROPERTY CXX_STANDARD_REQUIRED ON)
+set_property(TARGET terrain_slam PROPERTY CXX_STANDARD 11)
+set_property(TARGET terrain_slam PROPERTY CXX_STANDARD_REQUIRED ON)

@@ -24,9 +24,12 @@
 #define TERRAIN_SLAM_H
 
 #include <terrain_slam/clouds.h>
+#include <terrain_slam/graph.h>
 #include <terrain_slam/adjuster.h>
 
 #include <vector>
+
+#define DEFAULT_WEIGHT 100
 
 namespace terrain_slam {
 class TerrainSlam {
@@ -96,7 +99,8 @@ public:
 
   Transform findTransform(const std::vector<CloudPatchPtr> &c, int id1, int id2);
 
-  Adjuster* adj_;
+  boost::shared_ptr<Adjuster> adj_;
+  boost::shared_ptr<Graph> graph_;
 
   std::string clouds_dir_;
   double patch_size_;

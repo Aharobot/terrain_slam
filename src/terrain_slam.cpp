@@ -34,7 +34,7 @@ namespace po = boost::program_options;
 using namespace std;
 using namespace cv;
 
-terrain_slam::TerrainSlam::TerrainSlam(int argc, char **argv) {
+terrain_slam::TerrainSlam::TerrainSlam(int argc, char **argv) : adj_(new Adjuster()), graph_(new Graph()) {
   patch_size_ = 5.0;
   mean_k_     = 10;
   std_mult_   = 6.0;
@@ -226,8 +226,8 @@ void terrain_slam::TerrainSlam::readFiles(const vector<string> &cloud_names,
         if (points.size() > 10 && filter_) {
           OutlierRemover sor;
           sor.setInput(line.points);
-          sor.setMeanK(10);
-          sor.setStdThresh(3.0);
+          sor.setMeanK(mean_k_);
+          sor.setStdThresh(std_mult_);
           Eigen::MatrixXd output;
           sor.filter(output);
           line.points.resize(output.rows(), output.cols());
@@ -285,14 +285,27 @@ terrain_slam::TerrainSlam::createPatches(
     }
 
     if (robot_distance > patch_size_ || centroid_distance > 10.0 || i == lines.size() - 1 || jump) {
+      // create new patch
       CloudPatchPtr patch(new CloudPatch(lines, pivot_idx, i));
       patch->setId(patch_idx);
       // patch.save(patch_idx);
+
+      // add to vector
       patches.push_back(patch);
+
+      // add to graph
+      graph_->addVertex(patch->getIsometry());
+      if (robot_distance > patch_size_ && patch_idx > 0) {
+        Transform edge(patches[patch_idx - 1]->T.inverse()*patches[patch_idx]->T);
+        graph_->addEdge(patch_idx - 1, patch_idx, edge.getIsometry(), DEFAULT_WEIGHT);
+      }
+
       pivot_idx = i + 1;
       patch_idx++;
     }
   }
+
+  graph_->saveGraph();
 
   // Grid patches
   std::cout << "[INFO]: Gridding... (parallel)" << std::endl;
@@ -338,7 +351,6 @@ terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
   //                               -1.0, 1.0,
   //                               -0.1, 0.1,
   //                               0.1, 0.1, 0.02);
-  adj_ = new Adjuster();
   boost::shared_ptr<CloudPatch> c1(c.at(id1));
   boost::shared_ptr<CloudPatch> c2(c.at(id2));
   adj_->adjust(c1, c2);

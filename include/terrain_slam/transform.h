@@ -85,6 +85,25 @@ public:
     return T(2, 3);
   }
 
+  double distanceTo(Transform other) const {
+    Eigen::Vector3d p = getPosition();
+    Eigen::Vector3d po = other.getPosition();
+    Eigen::Vector3d d = p - po;
+    return d.norm();
+  }
+
+  Eigen::Isometry3d getIsometry() const {
+    Eigen::Vector3d t(getPosition());
+    Eigen::Quaterniond q(R());
+    Eigen::Isometry3d out = (Eigen::Isometry3d)q;
+    out.translation() = t;
+    return out;
+  }
+
+  Eigen::Vector3d getOrigin(void) const {
+    return getPosition();
+  }
+
   Eigen::Vector3d getPosition(void) const {
     return T.block<3, 1>(0,3).transpose();
   }
