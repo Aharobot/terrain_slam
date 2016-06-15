@@ -84,14 +84,6 @@ public:
                      std::vector<CloudPatchPtr>& patches);
 
   /**
-   * @brief Save the patch to a file
-   *
-   * @param[in]   patch       CloudPatch to save
-   * @param       idx         All saved files follow the same name, you provide the numbering
-   */
-  void savePatch(const CloudPatchPtr& patch, int idx);
-
-  /**
    * @brief Finds overlapping patches, and return their paired indexes
    *
    * @param[in]   patches     Input vector of CloudPatch

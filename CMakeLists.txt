@@ -120,7 +120,10 @@ target_link_libraries(outlier_remover ${libnabo_LIBRARIES})
 add_library(adjuster src/adjuster.cpp)
 target_link_libraries(adjuster ${CERES_LIBRARIES})
 
-add_executable(terrain_slam src/terrain_slam.cpp ${MY_HEADERS})
+add_library(gridder src/gridder.cpp)
+target_link_libraries(gridder ${CERES_LIBRARIES})
+
+add_executable(terrain_slam src/terrain_slam.cpp src/clouds.cpp ${MY_HEADERS})
 
 add_to_cached_list(CGAL_EXECUTABLE_TARGETS terrain_slam)
 
@@ -128,4 +131,5 @@ add_to_cached_list(CGAL_EXECUTABLE_TARGETS terrain_slam)
 target_link_libraries(terrain_slam  ${OpenCV_LIBRARIES}
                                     ${Boost_LIBRARIES}
                                     outlier_remover
-                                    adjuster)
+                                    adjuster
+                                    gridder)

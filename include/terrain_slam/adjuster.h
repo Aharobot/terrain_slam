@@ -26,6 +26,8 @@
 
 #include <terrain_slam/clouds.h>
 
+#include <pointmatcher/PointMatcher.h>
+
 #include <ceres/ceres.h>
 #include <ceres/rotation.h>
 #include <Eigen/Geometry>
@@ -36,10 +38,28 @@
 namespace terrain_slam {
 class Adjuster {
 public:
+  /**
+   * @brief Default class constructor.
+   */
   Adjuster();
+
+  /**
+   * @brief Default destructor.
+   */
   ~Adjuster();
+
+  /**
+   * @brief      Adjusts the positions of the graph.
+   *
+   * @param      cloud_fixed  The cloud fixed
+   * @param      cloud        The cloud
+   */
   void adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
               const boost::shared_ptr<CloudPatch> &cloud);
+
+  /**
+   * @brief Restarts the Ceres problem
+   */
   void reset();
 
 protected:
@@ -48,6 +68,54 @@ protected:
   // Mutex to control the access to the adjuster.
   boost::mutex mutex_adjuster_;
 };  // class
+
+class BruteForceAdjuster {
+public:
+  BruteForceAdjuster(double x_min,
+                     double x_max,
+                     double y_min,
+                     double y_max,
+                     double z_min,
+                     double z_max,
+                     double yaw_min,
+                     double yaw_max,
+                     double xy_resolution,
+                     double z_resolution,
+                     double yaw_resolution);
+  void adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
+              const boost::shared_ptr<CloudPatch> &cloud);
+  double computeCost(const boost::shared_ptr<CloudPatch> &cloud_fixed,
+                    const boost::shared_ptr<CloudPatch> &cloud,
+                    const Transform& tf);
+private:
+  double x_min_;
+  double x_max_;
+  double y_min_;
+  double y_max_;
+  double z_min_;
+  double z_max_;
+  double yaw_min_;
+  double yaw_max_;
+  double xy_resolution_;
+  double z_resolution_;
+  double yaw_resolution_;
+};  // class
+
+// class PMAdjuster {
+// public:
+//   typedef PointMatcher<double> PM;
+//   typedef PM::DataPoints DP;
+
+//   PMAdjuster();
+//   void adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
+//               const boost::shared_ptr<CloudPatch> &cloud);
+// private:
+//   DP c1;
+//   DP c2;
+
+//   void copy2PM(const boost::shared_ptr<CloudPatch> &cp,
+//                DP& dp);
+// };  // class
 
 /**
  * @brief I am implementing the Iterative Closest Point Algorithm where the
@@ -60,21 +128,20 @@ protected:
 class AdjusterCostFunctor {
 public:
   AdjusterCostFunctor(const boost::shared_ptr<CloudPatch> &c,
-                      const Eigen::Vector4d &p)
-      : c_(c), p_(p) {
+                      const Eigen::Vector4d &pt,
+                      const double& r, const double& p)
+      : c_(c), p_(pt), roll(r), pitch(p) {
     // empty
   }
 
   bool operator()(double const* const _tx,
                   double const* const _ty,
                   double const* const _tz,
-                  double const* const _roll,
-                  double const* const _pitch,
                   double const* const _yaw,
                   double* residuals) const {
     // Copy the values
-    double roll  = *_roll;
-    double pitch = *_pitch;
+    // double roll  = *_roll;
+    // double pitch = *_pitch;
     double yaw   = *_yaw;
     double tx    = *_tx;
     double ty    = *_ty;
@@ -83,22 +150,19 @@ public:
     // std::cout << "Cost: " << tx << ", " << ty << ", " << tz << ", " << roll << ", " << pitch << ", " << yaw << ", " << std::endl;
 
     // Set the transformation matrix
-    Eigen::Matrix3d R = Eigen::Matrix3d::Zero();
-    R = Eigen::AngleAxisd(roll,  Eigen::Vector3d::UnitX()) *
-        Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) *
-        Eigen::AngleAxisd(yaw,   Eigen::Vector3d::UnitZ());
-    Eigen::Vector3d t(tx, ty, tz);
     Eigen::Matrix4d T;
-    T.block<3,3>(0,0) = R;
-    T.block<3,1>(0,3) = t;
-    T(3,3) = 1.0;
+    double A = cos(yaw),  B = sin(yaw),  C  = cos(pitch), D  = sin(pitch),
+           E = cos(roll), F = sin(roll), DE = D*E,        DF = D*F;
+
+    T(0, 0) = A*C;  T(0, 1) = A*DF - B*E;  T(0, 2) = B*F + A*DE;  T(0, 3) = tx;
+    T(1, 0) = B*C;  T(1, 1) = A*E + B*DF;  T(1, 2) = B*DE - A*F;  T(1, 3) = ty;
+    T(2, 0) = -D;   T(2, 1) = C*F;         T(2, 2) = C*E;         T(2, 3) = tz;
+    T(3, 0) = 0;    T(3, 1) = 0;           T(3, 2) = 0;           T(3, 3) = 1;
+
 
     // Do the math
-    Eigen::Matrix4Xd grid = c_->getGrid();
     Eigen::Vector4d p = p_;
-    Eigen::Matrix4Xd tf_T = c_->tf();
-    Eigen::Matrix4Xd inv_T = tf_T.inverse();
-    Eigen::Vector4d pt = inv_T * T * p;
+    Eigen::Vector4d pt = T * p;
 
     // Find three closest points in cloud
     std::vector<Eigen::Vector4d> nn = c_->kNN(pt, 3);
@@ -113,8 +177,6 @@ public:
     Eigen::Vector3d w  = p1 - pt.hnormalized();
     Eigen::Vector3d n  = v1.cross(v2);
     residuals[0] = n.dot(w) / n.norm();
-    residuals[1] = 0;
-    residuals[2] = 0;
 
     return true;
   }
@@ -122,6 +184,8 @@ public:
 protected:
   boost::shared_ptr<CloudPatch> c_;
   Eigen::Vector4d p_;
+  double roll;
+  double pitch;
 };  // class
 }   // namespace
 
