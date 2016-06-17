@@ -142,10 +142,10 @@ public:
     // Copy the values
     // double roll  = *_roll;
     // double pitch = *_pitch;
-    double yaw   = *_yaw;
     double tx    = *_tx;
     double ty    = *_ty;
     double tz    = *_tz;
+    double yaw   = *_yaw;
 
     // std::cout << "Cost: " << tx << ", " << ty << ", " << tz << ", " << roll << ", " << pitch << ", " << yaw << ", " << std::endl;
 
@@ -172,12 +172,14 @@ public:
     Eigen::Vector3d p3(nn.at(2).hnormalized());
 
     // Calculate distance to plane
-    Eigen::Vector3d v1 = p1 - p2;
-    Eigen::Vector3d v2 = p1 - p3;
-    Eigen::Vector3d w  = p1 - pt.hnormalized();
+    Eigen::Vector3d v1 = p2 - p1;
+    Eigen::Vector3d v2 = p3 - p1;
+    Eigen::Vector3d w  = pt.hnormalized() - p1;
     Eigen::Vector3d n  = v1.cross(v2);
-    residuals[0] = n.dot(w) / n.norm();
-
+    // residuals[0] = n.dot(w) / n.norm();
+    residuals[0] = w(0);
+    residuals[1] = w(1);
+    residuals[2] = w(2);
     return true;
   }
 

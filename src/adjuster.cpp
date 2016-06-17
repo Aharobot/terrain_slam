@@ -74,29 +74,29 @@ void terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_f
 
   // std::cout << "T " << cloud->T << std::endl;
   // std::cout << "Parameter block: " << tx << ", " << ty << ", " << tz << ", " << roll << ", " << pitch << ", " << yaw << ", " << std::endl;
-  for (size_t i = 0; i < cloud->points.cols(); i++) {
-    Eigen::Vector4d point = cloud->points.col(i);
+  for (size_t i = 0; i < cloud->gridSize(); i++) {
+    Eigen::Vector4d point = cloud->getGridPoint(i);
 
     AdjusterCostFunctor *hcfunctor =
         new AdjusterCostFunctor(cloud_fixed, point, roll, pitch);
     ceres::CostFunction *cost_function =
-        new ceres::NumericDiffCostFunction<AdjusterCostFunctor, ceres::FORWARD, 1, 1, 1, 1, 1>(hcfunctor);
+        new ceres::NumericDiffCostFunction<AdjusterCostFunctor, ceres::CENTRAL, 3, 1, 1, 1, 1>(hcfunctor);
     problem_->AddResidualBlock(cost_function, NULL, &tx, &ty, &tz, &yaw);
   }
 
   // Add constrains
-  problem_->SetParameterLowerBound(&tx, 0, tx - 5.0);
-  problem_->SetParameterUpperBound(&tx, 0, tx + 5.0);
-  problem_->SetParameterLowerBound(&ty, 0, ty - 5.0);
-  problem_->SetParameterUpperBound(&ty, 0, ty + 5.0);
-  problem_->SetParameterLowerBound(&tz, 0, tz - 5.0);
-  problem_->SetParameterUpperBound(&tz, 0, tz + 5.0);
+  // problem_->SetParameterLowerBound(&tx, 0, tx - 5.0);
+  // problem_->SetParameterUpperBound(&tx, 0, tx + 5.0);
+  // problem_->SetParameterLowerBound(&ty, 0, ty - 5.0);
+  // problem_->SetParameterUpperBound(&ty, 0, ty + 5.0);
+  // problem_->SetParameterLowerBound(&tz, 0, tz - 5.0);
+  // problem_->SetParameterUpperBound(&tz, 0, tz + 5.0);
   // problem_->SetParameterLowerBound(&roll, 0, roll - 0.1);
   // problem_->SetParameterUpperBound(&roll, 0, roll + 0.1);
   // problem_->SetParameterLowerBound(&pitch, 0, pitch - 0.1);
   // problem_->SetParameterUpperBound(&pitch, 0, pitch + 0.1);
-  problem_->SetParameterLowerBound(&yaw, 0, yaw - 0.2);
-  problem_->SetParameterUpperBound(&yaw, 0, yaw + 0.2);
+  // problem_->SetParameterLowerBound(&yaw, 0, yaw - 0.2);
+  // problem_->SetParameterUpperBound(&yaw, 0, yaw + 0.2);
 
   // Performing the optimization
   ceres::Solver::Options solver_options;
@@ -137,10 +137,10 @@ void terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_f
   std::string path("../adjusted");
   std::ostringstream suffix;
   suffix << "_" << cloud_fixed->getId() << "_" << cloud->getId();
-  cloud_fixed->save(cloud_fixed->getId(), path, suffix.str());
+  cloud_fixed->save(cloud_fixed->getId(), path, suffix.str(), false, true);
 
   cloud->setTransform(cloud_fixed->T * new_tf.T);
-  cloud->save(cloud->getId(), path, suffix.str());
+  cloud->save(cloud->getId(), path, suffix.str(), false, true);
 
   std::cout << "Before: \n" << relative.T << std::endl;
   std::cout << "After: \n" << new_tf.T << std::endl;

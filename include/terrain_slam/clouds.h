@@ -101,7 +101,8 @@ public:
   void save(int idx,
             const std::string& path = std::string("../output"),
             const std::string& suffix = std::string(""),
-            bool local_coordinate_frame = false) ;
+            bool local_coordinate_frame = false,
+            bool grid = false) ;
 
   /**
    * @brief      Gets the start index.
@@ -153,6 +154,8 @@ public:
    * @return     The grid.
    */
   Eigen::Matrix4Xd getGrid() const { return grid_; }
+  Eigen::Vector4d getGridPoint(int i) const { return grid_.col(i); }
+  size_t gridSize() const { return grid_.cols(); }
 
   /**
    * @brief      Gets the points.
@@ -162,7 +165,8 @@ public:
    *
    * @return     The points.
    */
-  Eigen::Matrix4Xd getPoints(bool local_coordinate_frame = false) const ;
+  Eigen::Matrix4Xd getPoints(bool local_coordinate_frame = false,
+                             bool grid = false) const ;
 
   /**
    * @brief      Gets the centroid.

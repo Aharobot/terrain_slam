@@ -75,16 +75,30 @@ std::vector<Eigen::Vector4d> terrain_slam::CloudPatch::kNN(const Eigen::Vector4d
   return nn;
 }
 
-Eigen::Matrix4Xd terrain_slam::CloudPatch::getPoints(bool local_coordinate_frame) const {
-  Eigen::Matrix4Xd m(points.rows(), points.cols());
-  for (int i = 0; i < points.cols(); i++) {
-    if (local_coordinate_frame) {
-      m.col(i) = points.col(i);
-    } else {
-      m.col(i) = tf()*points.col(i);
+Eigen::Matrix4Xd terrain_slam::CloudPatch::getPoints(
+    bool local_coordinate_frame,
+    bool grid) const {
+  if (!grid) {
+    Eigen::Matrix4Xd m(points.rows(), points.cols());
+    for (int i = 0; i < points.cols(); i++) {
+      if (local_coordinate_frame) {
+        m.col(i) = points.col(i);
+      } else {
+        m.col(i) = tf()*points.col(i);
+      }
     }
+    return m;
+  } else {
+    Eigen::Matrix4Xd m(grid_.rows(), grid_.cols());
+    for (int i = 0; i < grid_.cols(); i++) {
+      if (local_coordinate_frame) {
+        m.col(i) = grid_.col(i);
+      } else {
+        m.col(i) = tf()*grid_.col(i);
+      }
+    }
+    return m;
   }
-  return m;
 }
 
 Eigen::Vector3d terrain_slam::CloudPatch::getCentroid() const {
@@ -99,7 +113,8 @@ Eigen::Vector3d terrain_slam::CloudPatch::getCentroid() const {
 void terrain_slam::CloudPatch::save(int idx,
           const std::string& path,
           const std::string& suffix,
-          bool local_coordinate_frame) {
+          bool local_coordinate_frame,
+          bool grid) {
   boost::filesystem::path dir(path);
   boost::filesystem::create_directory(dir);
   std::ostringstream ss;
@@ -107,7 +122,7 @@ void terrain_slam::CloudPatch::save(int idx,
   std::string cloud_filename = path + "/cloud" + ss.str() + suffix + ".ply";
   std::cout << "[INFO]: Saving ply file " << cloud_filename << std::endl;
   PlySaver saver;
-  saver.saveCloud(cloud_filename, getPoints(local_coordinate_frame));
+  saver.saveCloud(cloud_filename, getPoints(local_coordinate_frame, grid));
 }
 
 
