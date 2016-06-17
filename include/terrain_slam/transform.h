@@ -105,7 +105,7 @@ public:
   }
 
   Eigen::Vector3d getPosition(void) const {
-    return T.block<3, 1>(0,3).transpose();
+    return T.block<3, 1>(0,3);
   }
 
   void setTransform(const Eigen::Matrix4d &t) {

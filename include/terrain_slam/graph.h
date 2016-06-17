@@ -66,12 +66,14 @@ public:
 
   /** \brief Get the closest neighbors by distance
    * \param The vertex id to retrieve its neighbors
-   * \param The vertex where discard window will be centered.
-   * \param Window size of discarded vertices.
    * \param Number of neighbors to be retrieved.
    * \param Will contain the list of best neighbors by distance.
+   * \param Distance of the retrieved neighbours.
    */
-  void findClosestVertices(int vertex_id, int window_center, int window, int best_n, vector<int> &neighbors);
+  void findClosestVertices(int vertex_id,
+                           int best_n,
+                           vector<int> &neighbors,
+                          vector<double> &distances);
 
   /** \brief Get the graph vertex pose
    * @return graph vertex pose
@@ -93,8 +95,8 @@ protected:
    * \param pair 1
    * \param pair 2
    */
-  static bool sortByDistance(const pair<int, double> d1, const pair<int, double> d2)
-  {
+  static bool sortByDistance(const pair<int, double> d1,
+                             const pair<int, double> d2)  {
    return (d1.second < d2.second);
   }
 

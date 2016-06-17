@@ -118,6 +118,9 @@ void terrain_slam::TerrainSlam::process() {
       std::cout << "[INFO]: Find transform between " << id1 << " and " << id2 << std::endl;
       findTransform(patches, id1, id2);
     }
+
+    // Save results
+    graph_->saveGraph();
   }
 }
 
@@ -217,10 +220,14 @@ void terrain_slam::TerrainSlam::readFiles(const vector<string> &cloud_names,
 
         Eigen::Vector3d xyz = cv2eigen(robot_position);
         Eigen::Vector3d rpy = cv2eigen(robot_orientation) * M_PI / 180.0;
+
         LaserLine line(points.size(), xyz, rpy);
         for (size_t j = 0; j < points.size(); j++) {
           line.add(cv2eigen(points[j]), j);
         }
+
+        line.setId(i);
+        line.setFilename(cloud_names[i]);
 
         // Filter line, remove outliers
         if (points.size() > 10 && filter_) {
@@ -262,6 +269,7 @@ terrain_slam::TerrainSlam::createPatches(
   int patch_idx = 0;
 
   cout << "[INFO]: Processing... " << endl;
+  bool joined = true;
   for (size_t i = 0; i < lines.size(); i++) {
     // Accumulate clouds while distance is less than patch_size_
     Eigen::Vector3d pos1 = lines[pivot_idx].getPosition();
@@ -274,7 +282,12 @@ terrain_slam::TerrainSlam::createPatches(
       Eigen::Vector3d pos_b = lines[i + 1].getPosition();
       Eigen::Vector3d robot_diff_prev = pos_b - pos2;
       double d = robot_diff_prev.norm();
-      if (d > 0.5) jump = true;
+      if (d > 0.5) {
+        jump = true;
+        // std::cout << "Jump of " << robot_diff_prev.transpose() << " from line " << i << " to " << i + 1 << std::endl;
+        // std::cout << "line i + 1: " << lines[i + 1].getPosition().transpose() << " id: " << lines[i + 1].getFilename() << std::endl;
+        // std::cout << "line i: " << lines[i].getPosition().transpose() << " id: " << lines[i].getFilename() << std::endl;
+      }
     }
 
     if (i < lines.size() - 1) {
@@ -288,24 +301,31 @@ terrain_slam::TerrainSlam::createPatches(
       // create new patch
       CloudPatchPtr patch(new CloudPatch(lines, pivot_idx, i));
       patch->setId(patch_idx);
-      // patch.save(patch_idx);
+      // patch->save(patch_idx);
 
       // add to vector
       patches.push_back(patch);
 
       // add to graph
+      // if (robot_distance > patch_size_) std::cout << "Robot distance ";
+      // if (centroid_distance > 10.0) std::cout << "Centroid ";
+      // if (i == lines.size() - 1) std::cout << "Size ";
+      // if (jump) std::cout << "Jump ";
       graph_->addVertex(patch->getIsometry());
-      if (robot_distance > patch_size_ && patch_idx > 0) {
+
+      if (joined && patch_idx > 0) {
         Transform edge(patches[patch_idx - 1]->T.inverse()*patches[patch_idx]->T);
         graph_->addEdge(patch_idx - 1, patch_idx, edge.getIsometry(), DEFAULT_WEIGHT);
+      } else if (!joined) {
+        joined = true;
       }
 
       pivot_idx = i + 1;
       patch_idx++;
+
+      if (jump) joined = false;
     }
   }
-
-  graph_->saveGraph();
 
   // Grid patches
   std::cout << "[INFO]: Gridding... (parallel)" << std::endl;
@@ -322,20 +342,39 @@ terrain_slam::TerrainSlam::lookForCandidates(
     const vector<CloudPatchPtr>& patches,
     vector<pair<int, int> >& candidates) {
   cout << "[INFO]: Looking for candidates... " << endl;
+
+  vector<vector<int> > neighbors(patches.size());
   for (size_t i = 0; i < patches.size(); i++) {
-    for (size_t j = i + 1; j < patches.size(); j++) {
-      Eigen::Vector3d ci = patches.at(i)->getCentroid();
-      Eigen::Vector3d cj = patches.at(j)->getCentroid();
-      Eigen::Vector3d diff = ci - cj;
-      double distance = diff.norm();
-      if (distance < 5.0) {
-        cout << "[INFO]: Between " << i << " and " << j
-             << " distance: " << distance << endl;
-        pair<int, int> p = make_pair(i, j);
+    vector<double> distance;
+    graph_->findClosestVertices(i, 3, neighbors[i], distance);
+    for (size_t j = 0; j < neighbors[i].size(); j++) {
+      if (i > neighbors[i][j]) continue;  // if 1 -> 6, 6 -> 1 too.
+      if (distance[i] > 2*patch_size_) continue;
+      pair<int, int> p = make_pair(i, neighbors[i][j]);
+      // Check if the pair already exist
+      if (std::find(candidates.begin(),
+                     candidates.end(),
+                     p) == candidates.end()) {
         candidates.push_back(p);
+        cout << "[INFO]: ByDistance " << i << " - " << neighbors[i][j] << endl;
       }
     }
   }
+
+  // for (size_t i = 0; i < patches.size(); i++) {
+  //   for (size_t j = i + 1; j < patches.size(); j++) {
+  //     Eigen::Vector3d ci = patches.at(i)->getCentroid();
+  //     Eigen::Vector3d cj = patches.at(j)->getCentroid();
+  //     Eigen::Vector3d diff = ci - cj;
+  //     double distance = diff.norm();
+  //     if (distance < 5.0) {
+  //       cout << "[INFO]: Between " << i << " and " << j
+  //            << " distance: " << distance << endl;
+  //       pair<int, int> p = make_pair(i, j);
+  //       //candidates.push_back(p);
+  //     }
+  //   }
+  // }
 }
 
 ////////////////////////////////////////////////////////////////////////////////

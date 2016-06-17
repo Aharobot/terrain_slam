@@ -66,6 +66,12 @@ void terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_f
   double ty = relative.ty();
   double tz = relative.tz();
 
+  // Compute overlap
+  // for (size_t i = 0; i < candidates.size(); i++) {
+  //   CloudPatchPtr cop;
+  //   cloud_fixed->overlap(cloud.get(), cop);
+  // }
+
   // std::cout << "T " << cloud->T << std::endl;
   // std::cout << "Parameter block: " << tx << ", " << ty << ", " << tz << ", " << roll << ", " << pitch << ", " << yaw << ", " << std::endl;
   for (size_t i = 0; i < cloud->points.cols(); i++) {
@@ -111,7 +117,7 @@ void terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_f
   solver_options.num_threads = sysconf(_SC_NPROCESSORS_ONLN);
   solver_options.num_linear_solver_threads = sysconf(_SC_NPROCESSORS_ONLN);
 
-  solver_options.initial_trust_region_radius = 4.0; // 1e14;
+  solver_options.initial_trust_region_radius = 1e14; // 4.0;
   solver_options.max_solver_time_in_seconds = 600;
 
   solver_options.parameter_tolerance = 1e-18;

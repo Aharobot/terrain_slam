@@ -44,7 +44,7 @@ int terrain_slam::Graph::addVertex(const Eigen::Isometry3d& pose) {
   // Set node id equal to graph size
   int id = graph_optimizer_.vertices().size();
 
-  std::cout << "Adding vertex " << id << std::endl;
+  // std::cout << "Adding vertex " << id << std::endl;
 
   // Build the vertex
   g2o::VertexSE3* cur_vertex = new g2o::VertexSE3();
@@ -64,7 +64,7 @@ void terrain_slam::Graph::addEdge(int i, int j, const Eigen::Isometry3d& edge, i
   g2o::VertexSE3* v_i = dynamic_cast<g2o::VertexSE3*>(graph_optimizer_.vertices()[i]);
   g2o::VertexSE3* v_j = dynamic_cast<g2o::VertexSE3*>(graph_optimizer_.vertices()[j]);
 
-  std::cout << "Adding edge between " << i << " and " << j << std::endl;
+  // std::cout << "Adding edge between " << i << " and " << j << std::endl;
 
   Eigen::Matrix<double, 6, 6> information = Eigen::Matrix<double, 6, 6>::Identity() * (double)sigma;
 
@@ -79,10 +79,9 @@ void terrain_slam::Graph::addEdge(int i, int j, const Eigen::Isometry3d& edge, i
 }
 
 void terrain_slam::Graph::findClosestVertices(int vertex_id,
-                                              int window_center,
-                                              int window,
                                               int best_n,
-                                              vector<int> &neighbors) {
+                                              vector<int> &neighbors,
+                                              vector<double> &distances) {
   // Init
   neighbors.clear();
   Eigen::Isometry3d vertex_pose = getVertexPose(vertex_id);
@@ -90,8 +89,12 @@ void terrain_slam::Graph::findClosestVertices(int vertex_id,
   // Loop thought all the other nodes
   vector< pair< int,double > > neighbor_distances;
   for (size_t i = 0; i < graph_optimizer_.vertices().size(); i++) {
+    // Do not allow same
     if ((int)i == vertex_id) continue;
-    if ((int)i > window_center - window && (int)i < window_center+window) continue;
+
+    // Do not allow consecutive
+    if ((int)i == vertex_id - 1) continue;
+    if ((int)i == vertex_id + 1) continue;
 
     // Get the node pose
     Eigen::Isometry3d cur_pose = getVertexPose(i);
@@ -112,8 +115,10 @@ void terrain_slam::Graph::findClosestVertices(int vertex_id,
   if ((int)neighbor_distances.size() < best_n)
     best_n = neighbor_distances.size();
 
-  for (int i=0; i<best_n; i++)
+  for (int i=0; i<best_n; i++) {
     neighbors.push_back(neighbor_distances[i].first);
+    distances.push_back(neighbor_distances[i].second);
+  }
 }
 
 Eigen::Isometry3d terrain_slam::Graph::getVertexPose(int vertex_id, bool lock) {
@@ -220,5 +225,12 @@ void terrain_slam::Graph::saveGraph() {
 }
 
 void terrain_slam::Graph::run() {
-  // TODO
+  boost::mutex::scoped_lock lock(mutex_graph_);
+
+  // Optimize!
+  graph_optimizer_.initializeOptimization();
+  graph_optimizer_.optimize(20);
+
+  std::cout << "[INFO]: Optimization done in graph with "
+            << graph_optimizer_.vertices().size() << " vertices." << std::endl;
 }

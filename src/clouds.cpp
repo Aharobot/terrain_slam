@@ -97,8 +97,8 @@ Eigen::Vector3d terrain_slam::CloudPatch::getCentroid() const {
 }
 
 void terrain_slam::CloudPatch::save(int idx,
-          const std::string path,
-          const std::string suffix,
+          const std::string& path,
+          const std::string& suffix,
           bool local_coordinate_frame) {
   boost::filesystem::path dir(path);
   boost::filesystem::create_directory(dir);
@@ -125,3 +125,7 @@ Eigen::Matrix4Xd terrain_slam::CloudPatch::transform(const LaserLine& line) {
   return m;
 }
 
+void terrain_slam::CloudPatch::overlap(const CloudPatch& other,
+                                       CloudPatch& overlap) {
+
+}

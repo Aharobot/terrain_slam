@@ -42,7 +42,7 @@ class LaserLine: public Transform {
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   LaserLine(int num_points, const Transform& T)
-      : Transform(T) {
+      : Transform(T), id(-1) {
     points = Eigen::Matrix4Xd(4, num_points);
   }
   LaserLine(int num_points,
@@ -67,8 +67,17 @@ public:
     return v;
   }
 
+  size_t size() const { return points.cols(); }
+
+  void setId(int i) { id = i; }
+  int getId() const { return id; }
+  void setFilename(const std::string& f) { filename = f; }
+  std::string getFilename() const { return filename; }
+
   // Points are stored column-wise
   Eigen::Matrix4Xd points;
+  int id;
+  std::string filename;
 };
 
 class CloudPatch: public Transform {
@@ -90,8 +99,8 @@ public:
    * @param       idx         All saved files follow the same name, you provide the numbering
    */
   void save(int idx,
-            const std::string path = std::string("../output"),
-            const std::string suffix = std::string(""),
+            const std::string& path = std::string("../output"),
+            const std::string& suffix = std::string(""),
             bool local_coordinate_frame = false) ;
 
   /**
@@ -161,6 +170,14 @@ public:
    * @return     The centroid.
    */
   Eigen::Vector3d getCentroid() const ;
+
+  /**
+   * @brief      Computes the overlap between two clouds
+   *
+   * @param[in]  other    The other cloud
+   * @param      overlap  The overlapped cloud
+   */
+  void overlap(const CloudPatch& other, CloudPatch& overlap);
 
 protected:
   bool gridded_;
