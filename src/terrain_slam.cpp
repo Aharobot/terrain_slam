@@ -329,7 +329,7 @@ terrain_slam::TerrainSlam::createPatches(
 
   // Grid patches
   std::cout << "[INFO]: Gridding... (parallel)" << std::endl;
-  #pragma omp parallel for
+#pragma omp parallel for
   for (size_t i = 0; i < patches.size(); i++) {
     patches.at(i)->grid();
   }

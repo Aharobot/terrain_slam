@@ -89,26 +89,13 @@ void terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_f
   // problem_->SetParameterUpperBound(&tx, 0, tx + 5.0);
   // problem_->SetParameterLowerBound(&ty, 0, ty - 5.0);
   // problem_->SetParameterUpperBound(&ty, 0, ty + 5.0);
-  // problem_->SetParameterLowerBound(&tz, 0, tz - 5.0);
-  // problem_->SetParameterUpperBound(&tz, 0, tz + 5.0);
-  // problem_->SetParameterLowerBound(&roll, 0, roll - 0.1);
-  // problem_->SetParameterUpperBound(&roll, 0, roll + 0.1);
-  // problem_->SetParameterLowerBound(&pitch, 0, pitch - 0.1);
-  // problem_->SetParameterUpperBound(&pitch, 0, pitch + 0.1);
+  // problem_->SetParameterLowerBound(&tz, 0, tz - 1.0);
+  // problem_->SetParameterUpperBound(&tz, 0, tz + 1.0);
   // problem_->SetParameterLowerBound(&yaw, 0, yaw - 0.2);
   // problem_->SetParameterUpperBound(&yaw, 0, yaw + 0.2);
 
   // Performing the optimization
   ceres::Solver::Options solver_options;
-
-  // Global Optimization
-  // solver_options.linear_solver_type = ceres::SPARSE_SCHUR;
-  // solver_options.max_num_iterations = 1000;
-  // solver_options.minimizer_progress_to_stdout = false;
-  // solver_options.num_threads = sysconf( _SC_NPROCESSORS_ONLN );
-  // solver_options.num_linear_solver_threads = sysconf( _SC_NPROCESSORS_ONLN );
-  // solver_options.initial_trust_region_radius = 1e14;
-  // solver_options.max_solver_time_in_seconds = 600;
 
   // Local Optimization
   solver_options.linear_solver_type = ceres::DENSE_QR;
@@ -128,8 +115,8 @@ void terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_f
   ceres::Solve(solver_options, problem_, &sum);
   std::cout << sum.FullReport() << "\n";
 
-  std::cout << "Before: " << relative.tx() << ", " << relative.ty() << ", " << relative.tz() << ", " << relative.roll() << ", " << relative.pitch() << ", " << relative.yaw() << ", " << std::endl;
-  std::cout << "After:  " << tx << ", " << ty << ", " << tz << ", " << roll << ", " << pitch << ", " << yaw << ", " << std::endl;
+  std::cout << "Before: (" << relative.tx() << ", " << relative.ty() << ", " << relative.tz() << "); " << relative.roll() << ", " << relative.pitch() << ", " << relative.yaw() << ")" << std::endl;
+  std::cout << "After:  (" << tx << ", " << ty << ", " << tz << "); (" << roll << ", " << pitch << ", " << yaw << ")" << std::endl;
 
   // save
   Transform new_tf(tx, ty, tz, roll, pitch, yaw);
@@ -141,9 +128,6 @@ void terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_f
 
   cloud->setTransform(cloud_fixed->T * new_tf.T);
   cloud->save(cloud->getId(), path, suffix.str(), false, true);
-
-  std::cout << "Before: \n" << relative.T << std::endl;
-  std::cout << "After: \n" << new_tf.T << std::endl;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

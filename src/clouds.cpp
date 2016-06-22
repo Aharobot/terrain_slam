@@ -21,6 +21,7 @@
 //  DEALINGS IN THE SOFTWARE.
 
 #include <terrain_slam/ply_saver.h>
+#include <terrain_slam/ply_loader.h>
 #include <terrain_slam/clouds.h>
 
 #include <boost/filesystem.hpp>
@@ -53,9 +54,23 @@ void terrain_slam::CloudPatch::add(const LaserLine& line) {
 
 void terrain_slam::CloudPatch::grid(double resolution, double search_radius) {
   if (!gridded_) {
-    terrain_slam::Gridder g(resolution, search_radius);
-    g.setInput(points);
-    grid_ = g.grid();
+    // Try to open if the file exists
+    std::ostringstream ss;
+    ss << std::setw(4) << std::setfill('0') << getId();
+    std::string path("../grids/");
+    std::string cloud_filename = path + "cloud" + ss.str() + ".ply";
+    if (boost::filesystem::exists(cloud_filename)) {
+      std::cout << "Cloud " << cloud_filename << " exists. Loading... ";
+      grid_ = load(cloud_filename);
+      std::cout << grid_.cols() << " points!" << std::endl;
+      //save(getId(), std::string("../grids2"), std::string(""), true, true);
+    } else {
+      // If it doesn't, create it and save it.
+      terrain_slam::Gridder g(resolution, search_radius);
+      g.setInput(points);
+      grid_ = g.grid();
+      save(getId(), std::string("../grids"), std::string(""), true, true);
+    }
     nns_.reset(Nabo::NNSearchD::createKDTreeLinearHeap(grid_));
     gridded_ = true;
   }
@@ -108,6 +123,11 @@ Eigen::Vector3d terrain_slam::CloudPatch::getCentroid() const {
   c = tf()*c;
   Eigen::Vector3d v = c.hnormalized();
   return v;
+}
+
+Eigen::Matrix4Xd terrain_slam::CloudPatch::load(const std::string& filename) {
+  PlyLoader loader;
+  return loader.load(filename);
 }
 
 void terrain_slam::CloudPatch::save(int idx,

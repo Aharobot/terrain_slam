@@ -26,6 +26,10 @@
 
 #include <Eigen/Geometry>
 #include <iostream>
+#include <vector>
+#include <algorithm>
+#include <random>
+#include <memory>
 
 namespace terrain_slam {
 class Gridder {
@@ -35,9 +39,7 @@ public:
   /**
    * @brief      Default constructor
    */
-  Gridder() : init_(false), resolution_(0.2), search_radius_(0.4) {
-    // empty constructor
-  }
+  Gridder();
 
   /**
    * @brief      Constructor
@@ -45,10 +47,7 @@ public:
    * @param[in]  resolution     The resolution
    * @param[in]  search_radius  The search radius
    */
-  Gridder(double resolution, double search_radius) {
-    setResolution(resolution);
-    setSearchRadius(search_radius);
-  }
+  Gridder(double resolution, double search_radius);
 
   /**
    * @brief      Sets the resolution.
@@ -92,6 +91,9 @@ private:
   double resolution_;
   double search_radius_;
 
+  int ransac_max_iterations_;
+  int ransac_num_params_;
+
   /**
    * @brief      Gets the minimum and maximum coordinates of the cloud
    *
@@ -111,11 +113,12 @@ private:
    * @param[in]  x         X coordinate
    * @param[in]  y         Y coordinate
    * @param[in]  distance  The distance
+   * @param[out] p         A point at \f$(x, y, z)\f$, where the \f$z\f$ has
+   * been computed using weighted mean.
    *
-   * @return     A point at \f$(x, y, z)\f$, where the \f$z\f$ has been computed using
-   * weighted mean.
+   * @return     If successful
    */
-  Eigen::Vector3d reduce(const double &x, const double &y, const double &distance);
+  bool reduce(const double &x, const double &y, const double &distance, Eigen::Vector3d& p);
 };  // class
 }   // namespace
 

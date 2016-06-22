@@ -177,9 +177,9 @@ public:
     Eigen::Vector3d w  = pt.hnormalized() - p1;
     Eigen::Vector3d n  = v1.cross(v2);
     // residuals[0] = n.dot(w) / n.norm();
-    residuals[0] = w(0);
-    residuals[1] = w(1);
-    residuals[2] = w(2);
+    residuals[0] = w(2);
+    residuals[1] = w(1)*1e-3;
+    residuals[2] = w(0)*1e-3;
     return true;
   }
 

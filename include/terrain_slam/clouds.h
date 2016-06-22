@@ -89,9 +89,18 @@ public:
 
   void add(const LaserLine& line);
 
-  void grid(double resolution = 0.1, double search_radius = 0.2);
+  void grid(double resolution = 0.1, double search_radius = 0.1);
 
   std::vector<Eigen::Vector4d> kNN(const Eigen::Vector4d& q, int k) const ;
+
+  /**
+   * @brief      Loads a PLY into an eigen matrix
+   *
+   * @param[in]  filename  The filename
+   *
+   * @return     The point cloud
+   */
+  Eigen::Matrix4Xd load(const std::string& filename);
 
   /**
    * @brief Save the patch to a file

@@ -22,7 +22,9 @@ endif()
 set(EXTERNAL_LIBS "")
 
 # find_package(CGAL QUIET COMPONENTS  HINTS "/usr/local/lib/" "C:/Program Files/CGAL-4.3/build/")
-find_package(Boost REQUIRED COMPONENTS filesystem thread program_options system graph)
+find_package(Boost REQUIRED COMPONENTS program_options filesystem thread system graph)
+set(Boost_USE_MULTITHREADED ON)
+
 find_package(OpenCV REQUIRED HINTS "/opt/ros/kinetic")
 # find_package(GDAL REQUIRED)
 find_package(Ceres REQUIRED)
@@ -31,6 +33,7 @@ find_package(G2O REQUIRED)
 find_package(SuiteSparse REQUIRED)
 find_package(Cholmod REQUIRED)
 find_package(libnabo REQUIRED)
+find_package(PCL REQUIRED)
 
 if (OPENMP_FOUND)
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
@@ -47,12 +50,14 @@ endif()
 
 include_directories(${OpenCV_INCLUDE_DIRS}
                     # ${GDAL_INCLUDE_DIRS}
+                    ${Boost_INCLUDE_DIRS}
                     ${CERES_INCLUDE_DIRS}
                     ${G2O_INCLUDE_DIRS}
                     ${SUITESPARSE_INCLUDE_DIRS}
                     ${Eigen3_INCLUDE_DIR}
                     ${libnabo_INCLUDE_DIRS}
-                    ${CHOLMOD_INCLUDE_DIR})
+                    ${CHOLMOD_INCLUDE_DIR}
+                    ${PCL_INCLUDE_DIRS})
 
 set(g2o_LIBRARIES
     ${G2O_SOLVER_CHOLMOD}
@@ -99,8 +104,10 @@ add_executable(terrain_slam src/terrain_slam.cpp
 # add_to_cached_list(CGAL_EXECUTABLE_TARGETS terrain_slam)
 
 # Link the executable to CGAL and third-party libraries
-target_link_libraries(terrain_slam  ${OpenCV_LIBRARIES}
-                                    ${Boost_LIBRARIES}
+target_link_libraries(terrain_slam  Boost::program_options
+                                    Boost::system
+                                    Boost::filesystem
+                                    ${OpenCV_LIBRARIES}
                                     ${SUITESPARSE_LIBRARIES}
                                     ${g2o_LIBRARIES}
                                     cholmod
@@ -108,7 +115,11 @@ target_link_libraries(terrain_slam  ${OpenCV_LIBRARIES}
                                     adjuster
                                     graph
                                     gridder)
+set_property(TARGET adjuster PROPERTY CXX_STANDARD 11)
+set_property(TARGET adjuster PROPERTY CXX_STANDARD_REQUIRED ON)
 set_property(TARGET graph PROPERTY CXX_STANDARD 11)
 set_property(TARGET graph PROPERTY CXX_STANDARD_REQUIRED ON)
+set_property(TARGET gridder PROPERTY CXX_STANDARD 11)
+set_property(TARGET gridder PROPERTY CXX_STANDARD_REQUIRED ON)
 set_property(TARGET terrain_slam PROPERTY CXX_STANDARD 11)
 set_property(TARGET terrain_slam PROPERTY CXX_STANDARD_REQUIRED ON)
