@@ -34,7 +34,8 @@ namespace po = boost::program_options;
 using namespace std;
 using namespace cv;
 
-terrain_slam::TerrainSlam::TerrainSlam(int argc, char **argv) : adj_(new Adjuster()), graph_(new Graph()) {
+//terrain_slam::TerrainSlam::TerrainSlam(int argc, char **argv) : adj_(new Adjuster()), graph_(new Graph()) {
+terrain_slam::TerrainSlam::TerrainSlam(int argc, char **argv) : graph_(new Graph()) {
   patch_size_ = 5.0;
   mean_k_     = 10;
   std_mult_   = 6.0;
@@ -115,9 +116,12 @@ void terrain_slam::TerrainSlam::process() {
     for (size_t i = 0; i < candidates.size(); i++) {
       int id1 = candidates[i].first;
       int id2 = candidates[i].second;
-      std::cout << "[INFO]: Find transform between " << id1 << " and " << id2 << std::endl;
-      findTransform(patches, id1, id2);
+      // std::cout << "[INFO]: Find transform between " << id1 << " and " << id2 << std::endl;
+      // findTransform(patches, id1, id2);
     }
+
+    std::cout << "[INFO]: Find transform between 21 and 14" << std::endl;
+    findTransform(patches, 14, 21);
 
     // Save results
     graph_->saveGraph();
@@ -360,21 +364,6 @@ terrain_slam::TerrainSlam::lookForCandidates(
       }
     }
   }
-
-  // for (size_t i = 0; i < patches.size(); i++) {
-  //   for (size_t j = i + 1; j < patches.size(); j++) {
-  //     Eigen::Vector3d ci = patches.at(i)->getCentroid();
-  //     Eigen::Vector3d cj = patches.at(j)->getCentroid();
-  //     Eigen::Vector3d diff = ci - cj;
-  //     double distance = diff.norm();
-  //     if (distance < 5.0) {
-  //       cout << "[INFO]: Between " << i << " and " << j
-  //            << " distance: " << distance << endl;
-  //       pair<int, int> p = make_pair(i, j);
-  //       //candidates.push_back(p);
-  //     }
-  //   }
-  // }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -385,11 +374,13 @@ terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
                                          int id2) {
   // Adjust
   std::cout << "Adjusting " << id1 << " to " << id2 << "..." << std::endl;
-  // adj_ = new BruteForceAdjuster(-1.0, 1.0,
-  //                               -1.0, 1.0,
-  //                               -1.0, 1.0,
-  //                               -0.1, 0.1,
-  //                               0.1, 0.1, 0.02);
+  adj_.reset(new BruteForceAdjuster(-5.0, 1.0,  // x
+                                    -1.0, 5.0,  // y
+                                    -0.2, 0.2,  // z
+                                      0, 0,  // yaw
+                                      0.2,       // x-y resolution
+                                      0.5,       // z resolution
+                                      0.5));    // yaw resolution
   boost::shared_ptr<CloudPatch> c1(c.at(id1));
   boost::shared_ptr<CloudPatch> c2(c.at(id2));
   adj_->adjust(c1, c2);

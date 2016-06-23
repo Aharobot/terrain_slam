@@ -174,12 +174,20 @@ public:
     // Calculate distance to plane
     Eigen::Vector3d v1 = p2 - p1;
     Eigen::Vector3d v2 = p3 - p1;
-    Eigen::Vector3d w  = pt.hnormalized() - p1;
+    Eigen::Vector3d w1 = pt.hnormalized() - p1;
+    Eigen::Vector3d w2 = pt.hnormalized() - p2;
+    Eigen::Vector3d w3 = pt.hnormalized() - p3;
     Eigen::Vector3d n  = v1.cross(v2);
     // residuals[0] = n.dot(w) / n.norm();
-    residuals[0] = w(2);
-    residuals[1] = w(1)*1e-3;
-    residuals[2] = w(0)*1e-3;
+    residuals[0] = w1(0);
+    residuals[1] = w1(1);
+    residuals[2] = w1(2);
+    residuals[3] = w2(0);
+    residuals[4] = w2(1);
+    residuals[5] = w2(2);
+    residuals[6] = w3(0);
+    residuals[7] = w3(1);
+    residuals[8] = w3(2);
     return true;
   }
 

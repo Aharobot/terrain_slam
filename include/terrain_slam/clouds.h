@@ -165,6 +165,10 @@ public:
   Eigen::Matrix4Xd getGrid() const { return grid_; }
   Eigen::Vector4d getGridPoint(int i) const { return grid_.col(i); }
   size_t gridSize() const { return grid_.cols(); }
+  double gridResolution() const {
+    if (gridded_) return grid_resolution_;
+    else return 0.0;
+  }
 
   /**
    * @brief      Gets the points.
@@ -194,6 +198,7 @@ public:
 
 protected:
   bool gridded_;
+  double grid_resolution_;
   int start_idx_;
   int end_idx_;
   int id_;

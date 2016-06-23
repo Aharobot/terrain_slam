@@ -99,6 +99,7 @@ target_link_libraries(graph ${g2o_LIBRARIES})
 
 add_executable(terrain_slam src/terrain_slam.cpp
                             src/clouds.cpp
+                            src/transform.cpp
                             ${MY_HEADERS})
 
 # add_to_cached_list(CGAL_EXECUTABLE_TARGETS terrain_slam)

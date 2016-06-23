@@ -59,14 +59,13 @@ void terrain_slam::CloudPatch::grid(double resolution, double search_radius) {
     ss << std::setw(4) << std::setfill('0') << getId();
     std::string path("../grids/");
     std::string cloud_filename = path + "cloud" + ss.str() + ".ply";
+    grid_resolution_ = resolution;
     if (boost::filesystem::exists(cloud_filename)) {
-      std::cout << "Cloud " << cloud_filename << " exists. Loading... ";
       grid_ = load(cloud_filename);
-      std::cout << grid_.cols() << " points!" << std::endl;
       //save(getId(), std::string("../grids2"), std::string(""), true, true);
     } else {
       // If it doesn't, create it and save it.
-      terrain_slam::Gridder g(resolution, search_radius);
+      terrain_slam::Gridder g(grid_resolution_, search_radius);
       g.setInput(points);
       grid_ = g.grid();
       save(getId(), std::string("../grids"), std::string(""), true, true);

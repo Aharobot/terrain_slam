@@ -80,8 +80,8 @@ void terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_f
     AdjusterCostFunctor *hcfunctor =
         new AdjusterCostFunctor(cloud_fixed, point, roll, pitch);
     ceres::CostFunction *cost_function =
-        new ceres::NumericDiffCostFunction<AdjusterCostFunctor, ceres::CENTRAL, 3, 1, 1, 1, 1>(hcfunctor);
-    problem_->AddResidualBlock(cost_function, NULL, &tx, &ty, &tz, &yaw);
+        new ceres::NumericDiffCostFunction<AdjusterCostFunctor, ceres::CENTRAL, 9, 1, 1, 1, 1>(hcfunctor);
+    problem_->AddResidualBlock(cost_function, new ceres::HuberLoss(0.5), &tx, &ty, &tz, &yaw);
   }
 
   // Add constrains
@@ -166,31 +166,51 @@ terrain_slam::BruteForceAdjuster::adjust(
   int z_steps = (z_max_ - z_min_) / z_resolution_;
   int yaw_steps = (yaw_max_ - yaw_min_) / yaw_resolution_;
 
+  if (yaw_steps == 0) yaw_steps = 1;
+  if (z_steps == 0) z_steps = 1;
+
   std::vector<double> cost(x_steps*y_steps*z_steps*yaw_steps);
+  std::vector<Eigen::Matrix4d> tfs(x_steps*y_steps*z_steps*yaw_steps);
+
+  // Get relative transform
+  Eigen::Matrix4d relative = cloud_fixed->T.inverse() * cloud->T;
 
   boost::progress_display show_progress(x_steps*y_steps*z_steps*yaw_steps);
 
+  #pragma omp parallel for collapse(4)
   for (size_t xi = 0; xi < x_steps; xi++) {
-    double x = x_min_ + xy_resolution_*xi;
     for (size_t yi = 0; yi < y_steps; yi++) {
-      double y = y_min_ + xy_resolution_*yi;
       for (size_t zi = 0; zi < z_steps; zi++) {
-        double z = z_min_ + z_resolution_*zi;
         for (size_t yawi = 0; yawi < yaw_steps; yawi++) {
+          double x = x_min_ + xy_resolution_*xi;
+          double y = y_min_ + xy_resolution_*yi;
+          double z = z_min_ + z_resolution_*zi;
           double yaw = yaw_min_ + yaw_resolution_*yawi;
           Transform tf(x, y, z, 0, 0, yaw);
+          tf.T = relative * tf.T;
           cost.at(yawi + yaw_steps*(zi + z_steps*(yi + y_steps*xi))) =
             computeCost(cloud_fixed, cloud, tf);
+          tfs.at(yawi + yaw_steps*(zi + z_steps*(yi + y_steps*xi))) = tf.T;
           ++show_progress;
         }
       }
     }
   }
 
+  std::cout << "COST: " << std::endl;
+  for (size_t i = 0; i < cost.size(); i++)
+    std::cout << cost[i] << ", ";
+  std::cout << std::endl;
+
   // TODO
   std::vector<double>::iterator result = std::min_element(cost.begin(),
                                                           cost.end());
   std::cout << "min element at: " << std::distance(cost.begin(), result);
+  std::cout << "Transform: \n" << tfs[std::distance(cost.begin(), result)] << std::endl;
+
+  cloud->setTransform(cloud_fixed->tf()*tfs[std::distance(cost.begin(), result)]);
+  cloud_fixed->save(cloud_fixed->getId(), std::string("../grids2"), std::string(""), false, true);
+  cloud->save(cloud->getId(), std::string("../grids2"), std::string(""), false, true);
 }
 
 double terrain_slam::BruteForceAdjuster::computeCost(
@@ -199,26 +219,49 @@ double terrain_slam::BruteForceAdjuster::computeCost(
     const Transform& tf) {
   // Init cost
   double cost = 0;
-  // Get relative transform
-  Eigen::Matrix4d relative = cloud_fixed->T.inverse() * cloud->T;
+  int npoints = 0;
   // For each point
   for (size_t i = 0; i < cloud->size(); i++) {
     // Transform point
-    Eigen::Vector4d pt = relative * tf.T * cloud->point(i);
+    Eigen::Vector4d pt = tf.T * cloud->point(i);
+    // Eigen::Vector4d pt = tf.T * cloud->point(i);
     // Find three closest points in cloud
-    std::vector<Eigen::Vector4d> nn = cloud_fixed->kNN(pt, 3);
+    std::vector<Eigen::Vector4d> nn = cloud_fixed->kNN(pt, 1);
 
-    Eigen::Vector3d p1(nn.at(0).hnormalized());
-    Eigen::Vector3d p2(nn.at(1).hnormalized());
-    Eigen::Vector3d p3(nn.at(2).hnormalized());
+    Eigen::Vector4d p1(nn.at(0));
 
-    // Calculate distance to plane
-    Eigen::Vector3d v1 = p1 - p2;
-    Eigen::Vector3d v2 = p1 - p3;
-    Eigen::Vector3d w  = p1 - pt.hnormalized();
-    Eigen::Vector3d n  = v1.cross(v2);
-    cost += n.dot(w) / n.norm();
+    // Calculate distance to point
+    Eigen::Vector4d v1 = p1 - pt;
+    double xd = abs(v1(0));
+    double yd = abs(v1(1));
+    double zd = abs(v1(2));
+
+    // Decrease cost if points are away from camera
+    double mean_z_dist = (p1(2) + pt(2))*0.5;
+
+    // Account for points in the grid
+    double res = 2*cloud->gridResolution();
+
+    // Cost to add
+    double added_cost = 0;
+
+    if (xd < res && yd < res) {
+      if (zd > 0.5) {
+        added_cost += zd*2.0;
+      }else if (zd <= 0.5 && zd > 0.2) {
+        added_cost += zd*1.5;
+      } else {
+        added_cost += zd;
+      }
+      npoints++;
+    }
+    added_cost /= mean_z_dist;
+    cost += added_cost;
   }
+  if (cost == 0) cost = 1e99;
+  if (npoints > 0)
+    cost *= static_cast<double>(cloud->size()/npoints);
+  return cost;
 }
 
 // void
