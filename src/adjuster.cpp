@@ -54,7 +54,8 @@ void terrain_slam::Adjuster::reset() {
 ////////////////////////////////////////////////////////////////////////////////
 
 void terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
-                                    const boost::shared_ptr<CloudPatch> &cloud) {
+                                    const boost::shared_ptr<CloudPatch> &cloud,
+                                    bool grid) {
   boost::mutex::scoped_lock lock(mutex_adjuster_);
 
   // Iterating for each point
@@ -66,33 +67,32 @@ void terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_f
   double ty = relative.ty();
   double tz = relative.tz();
 
-  // Compute overlap
-  // for (size_t i = 0; i < candidates.size(); i++) {
-  //   CloudPatchPtr cop;
-  //   cloud_fixed->overlap(cloud.get(), cop);
-  // }
-
   // std::cout << "T " << cloud->T << std::endl;
   // std::cout << "Parameter block: " << tx << ", " << ty << ", " << tz << ", " << roll << ", " << pitch << ", " << yaw << ", " << std::endl;
-  for (size_t i = 0; i < cloud->gridSize(); i++) {
-    Eigen::Vector4d point = cloud->getGridPoint(i);
+  size_t max_i = 0;
+  if (grid) max_i = cloud->gridSize();
+  else max_i = cloud->size();
+  for (size_t i = 0; i < max_i; i++) {
+    Eigen::Vector4d point;
+    if (grid) point = cloud->getGridPoint(i);
+    else point = cloud->point(i);
 
     AdjusterCostFunctor *hcfunctor =
-        new AdjusterCostFunctor(cloud_fixed, point, roll, pitch);
+        new AdjusterCostFunctor(cloud_fixed, point, grid, roll, pitch);
     ceres::CostFunction *cost_function =
-        new ceres::NumericDiffCostFunction<AdjusterCostFunctor, ceres::CENTRAL, 9, 1, 1, 1, 1>(hcfunctor);
+        new ceres::NumericDiffCostFunction<AdjusterCostFunctor, ceres::CENTRAL, 3, 1, 1, 1, 1>(hcfunctor);
     problem_->AddResidualBlock(cost_function, new ceres::HuberLoss(0.5), &tx, &ty, &tz, &yaw);
   }
 
   // Add constrains
-  // problem_->SetParameterLowerBound(&tx, 0, tx - 5.0);
-  // problem_->SetParameterUpperBound(&tx, 0, tx + 5.0);
-  // problem_->SetParameterLowerBound(&ty, 0, ty - 5.0);
-  // problem_->SetParameterUpperBound(&ty, 0, ty + 5.0);
-  // problem_->SetParameterLowerBound(&tz, 0, tz - 1.0);
-  // problem_->SetParameterUpperBound(&tz, 0, tz + 1.0);
-  // problem_->SetParameterLowerBound(&yaw, 0, yaw - 0.2);
-  // problem_->SetParameterUpperBound(&yaw, 0, yaw + 0.2);
+  problem_->SetParameterLowerBound(&tx, 0, tx - 10.0);
+  problem_->SetParameterUpperBound(&tx, 0, tx + 10.0);
+  problem_->SetParameterLowerBound(&ty, 0, ty - 10.0);
+  problem_->SetParameterUpperBound(&ty, 0, ty + 10.0);
+  problem_->SetParameterLowerBound(&tz, 0, tz - 0.5);
+  problem_->SetParameterUpperBound(&tz, 0, tz + 0.5);
+  problem_->SetParameterLowerBound(&yaw, 0, yaw - 0.2);
+  problem_->SetParameterUpperBound(&yaw, 0, yaw + 0.2);
 
   // Performing the optimization
   ceres::Solver::Options solver_options;
@@ -104,7 +104,7 @@ void terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_f
   solver_options.num_threads = sysconf(_SC_NPROCESSORS_ONLN);
   solver_options.num_linear_solver_threads = sysconf(_SC_NPROCESSORS_ONLN);
 
-  solver_options.initial_trust_region_radius = 1e14; // 4.0;
+  solver_options.initial_trust_region_radius = solver_options.max_trust_region_radius; // 4.0;
   solver_options.max_solver_time_in_seconds = 600;
 
   solver_options.parameter_tolerance = 1e-18;
@@ -115,7 +115,7 @@ void terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_f
   ceres::Solve(solver_options, problem_, &sum);
   std::cout << sum.FullReport() << "\n";
 
-  std::cout << "Before: (" << relative.tx() << ", " << relative.ty() << ", " << relative.tz() << "); " << relative.roll() << ", " << relative.pitch() << ", " << relative.yaw() << ")" << std::endl;
+  std::cout << "Before: (" << relative.tx() << ", " << relative.ty() << ", " << relative.tz() << "); (" << relative.roll() << ", " << relative.pitch() << ", " << relative.yaw() << ")" << std::endl;
   std::cout << "After:  (" << tx << ", " << ty << ", " << tz << "); (" << roll << ", " << pitch << ", " << yaw << ")" << std::endl;
 
   // save
@@ -224,20 +224,23 @@ double terrain_slam::BruteForceAdjuster::computeCost(
   for (size_t i = 0; i < cloud->size(); i++) {
     // Transform point
     Eigen::Vector4d pt = tf.T * cloud->point(i);
-    // Eigen::Vector4d pt = tf.T * cloud->point(i);
-    // Find three closest points in cloud
-    std::vector<Eigen::Vector4d> nn = cloud_fixed->kNN(pt, 1);
 
+    // Find three closest points in cloud
+    std::vector<Eigen::Vector4d> nn = cloud_fixed->kNN(pt, 3);
     Eigen::Vector4d p1(nn.at(0));
+    Eigen::Vector4d p2(nn.at(1));
+    Eigen::Vector4d p3(nn.at(2));
 
     // Calculate distance to point
     Eigen::Vector4d v1 = p1 - pt;
-    double xd = abs(v1(0));
-    double yd = abs(v1(1));
-    double zd = abs(v1(2));
+    Eigen::Vector4d v2 = p2 - pt;
+    Eigen::Vector4d v3 = p3 - pt;
+    double xd = v1(0)*v1(0) + v2(0)*v2(0) + v3(0)*v3(0);
+    double yd = v1(1)*v1(1) + v2(1)*v2(1) + v3(1)*v3(1);
+    double zd = v1(2)*v1(2) + v2(2)*v2(2) + v3(2)*v3(2);
 
     // Decrease cost if points are away from camera
-    double mean_z_dist = (p1(2) + pt(2))*0.5;
+    double mean_z_dist = (p1(2) + p2(2) + p3(2) + pt(2))*0.25;
 
     // Account for points in the grid
     double res = 2*cloud->gridResolution();
@@ -258,9 +261,12 @@ double terrain_slam::BruteForceAdjuster::computeCost(
     added_cost /= mean_z_dist;
     cost += added_cost;
   }
-  if (cost == 0) cost = 1e99;
-  if (npoints > 0)
+  if (cost == 0) cost = 1e90;
+  if (npoints <= cloud->size()/4) {
+    cost = 1e50;
+  } else if (npoints > cloud->size()/4) {
     cost *= static_cast<double>(cloud->size()/npoints);
+  }
   return cost;
 }
 

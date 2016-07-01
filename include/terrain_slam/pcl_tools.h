@@ -23,6 +23,9 @@
 #ifndef PCL_TOOLS_H
 #define PCL_TOOLS_H
 
+#include <pcl/common/common.h>
+#include <pcl/point_types.h>
+
 typedef pcl::PointXYZ PointT;
 typedef pcl::PointCloud<PointT> CloudT;
 
@@ -32,20 +35,14 @@ namespace pcl_tools {
  * @brief      Convert an Eigen pointcloud to a PCL pointcloud
  *
  * @param[in]  points       Eigen pointcloud
- * @param[in]  origin       The sensor origin
- * @param[in]  orientation  The sensor orientation
  *
  * @return     PCL pointcloud pointer
  */
-static CloudT::Ptr toPCL(const Eigen::Matrix4Xd &points,
-                         const Eigen::Vector4f &origin = 0,
-                         const Eigen::Quaternionf &orientation = 0) {
+static CloudT::Ptr toPCL(const Eigen::Matrix4Xd &points) {
   CloudT::Ptr cloud(new CloudT);
   cloud->width = points.cols();
-  cloud->heigth = 1;  // unorganized point cloud
+  cloud->height = 1;  // unorganized point cloud
   cloud->is_dense = false;
-  cloud->sensor_origin = origin;
-  cloud->sensor_orientation = orientation;
   // Loop through all points
   for (int i = 0; i < points.cols(); i++) {
     double x = points(0, i);
@@ -53,6 +50,7 @@ static CloudT::Ptr toPCL(const Eigen::Matrix4Xd &points,
     double z = points(2, i);
     cloud->points.push_back(PointT(x, y, z));
   }
+  return cloud;
 }
 
 /**
@@ -63,13 +61,14 @@ static CloudT::Ptr toPCL(const Eigen::Matrix4Xd &points,
  * @return     Eigen pointcloud
  */
 static Eigen::Matrix4Xd fromPCL(const CloudT::Ptr& cloud) {
-  Eigen::Matrix4Xd m(4, cloud->size());
+  Eigen::Matrix4Xd points(4, cloud->size());
   // Loop through all points
   for (int i = 0; i < points.cols(); i++) {
-    points(0, i) = cloud->points[i][0];
-    points(1, i) = cloud->points[i][1];
-    points(2, i) = cloud->points[i][2];
+    points(0, i) = cloud->points[i].x;
+    points(1, i) = cloud->points[i].y;
+    points(2, i) = cloud->points[i].z;
   }
+  return points;
 }
 
 }  // namespace

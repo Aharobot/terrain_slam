@@ -36,6 +36,7 @@ terrain_slam::CloudPatch::CloudPatch(const std::vector<LaserLine>& lines, int st
   for (size_t i = start_idx; i <= end_idx; i++)
     add(lines[i]);
 }
+
 void terrain_slam::CloudPatch::add(const LaserLine& line) {
   // First line is the TF of the CloudPatch
   if (lines_.size() == 0) {
@@ -75,16 +76,52 @@ void terrain_slam::CloudPatch::grid(double resolution, double search_radius) {
   }
 }
 
+bool terrain_slam::CloudPatch::getMinMax(double &min_x, double &min_y,
+                                         double &max_x, double &max_y) {
+  min_x = points(0, 0);
+  min_y = points(0, 1);
+  max_x = points(0, 0);
+  max_y = points(0, 1);
 
-std::vector<Eigen::Vector4d> terrain_slam::CloudPatch::kNN(const Eigen::Vector4d& q, int k) const {
+  for (size_t i = 0; i < points.cols(); i++) {
+    Eigen::Vector4d v = points.col(i);
+    double vx = v(0);
+    double vy = v(1);
+    if (vx > max_x) {
+      max_x = vx;
+    } else if (vx < min_x) {
+      min_x = vx;
+    }
+
+    if (vy > max_y) {
+      max_y = vy;
+    } else if (vy < min_y) {
+      min_y = vy;
+    }
+  }
+  if ((min_x != max_x) && (min_y != max_y)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+void terrain_slam::CloudPatch::createkNN() {
+  Eigen::MatrixXd p(points);
+  nns_c_.reset(Nabo::NNSearchD::createKDTreeLinearHeap(p));
+}
+
+std::vector<Eigen::Vector4d> terrain_slam::CloudPatch::kNN(const Eigen::Vector4d& q, int k, bool grid) const {
   Eigen::VectorXi indices(k);
   Eigen::VectorXd dists2(k);
 
-  nns_->knn(q, indices, dists2, k);
+  if (grid) nns_->knn(q, indices, dists2, k);
+  else nns_c_->knn(q, indices, dists2, k);
   std::vector<Eigen::Vector4d> nn;
 
   for (size_t i = 0; i < k; i++) {
-    nn.push_back(grid_.col(indices(i)));
+    if (grid) nn.push_back(grid_.col(indices(i)));
+    else nn.push_back(points.col(indices(i)));
   }
   return nn;
 }

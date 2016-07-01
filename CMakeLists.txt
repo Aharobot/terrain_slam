@@ -33,7 +33,7 @@ find_package(G2O REQUIRED)
 find_package(SuiteSparse REQUIRED)
 find_package(Cholmod REQUIRED)
 find_package(libnabo REQUIRED)
-find_package(PCL REQUIRED)
+find_package(PCL 1.8 REQUIRED)
 
 if (OPENMP_FOUND)
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
@@ -111,6 +111,7 @@ target_link_libraries(terrain_slam  Boost::program_options
                                     ${OpenCV_LIBRARIES}
                                     ${SUITESPARSE_LIBRARIES}
                                     ${g2o_LIBRARIES}
+                                    ${PCL_LIBRARIES}
                                     cholmod
                                     outlier_remover
                                     adjuster
@@ -124,3 +125,16 @@ set_property(TARGET gridder PROPERTY CXX_STANDARD 11)
 set_property(TARGET gridder PROPERTY CXX_STANDARD_REQUIRED ON)
 set_property(TARGET terrain_slam PROPERTY CXX_STANDARD 11)
 set_property(TARGET terrain_slam PROPERTY CXX_STANDARD_REQUIRED ON)
+
+add_executable(test_adjuster src/test_adjuster.cpp
+                             src/clouds.cpp
+                             src/transform.cpp
+                             ${MY_HEADERS})
+target_link_libraries(test_adjuster adjuster
+                                    graph
+                                    gridder
+                                    outlier_remover
+                                    Boost::system
+                                    Boost::filesystem)
+set_property(TARGET test_adjuster PROPERTY CXX_STANDARD 11)
+set_property(TARGET test_adjuster PROPERTY CXX_STANDARD_REQUIRED ON)

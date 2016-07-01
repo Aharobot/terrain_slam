@@ -103,8 +103,13 @@ void terrain_slam::Transform::setTransform(const Eigen::Matrix4d &t) {
   T = t;
 }
 
+Eigen::Quaternion<double> terrain_slam::Transform::getRotation(void) const {
+  Eigen::Vector3d rpy(roll(), pitch(), yaw());
+  return rpy2Rot(rpy);
+}
+
 Eigen::Quaternion<double>
-terrain_slam::Transform::rpy2Rot(const Eigen::Vector3d& rpy) {
+terrain_slam::Transform::rpy2Rot(const Eigen::Vector3d& rpy) const {
   Eigen::AngleAxisd roll_angle(rpy(0), Eigen::Vector3d::UnitZ());
   Eigen::AngleAxisd pitch_angle(rpy(1), Eigen::Vector3d::UnitY());
   Eigen::AngleAxisd yaw_angle(rpy(2), Eigen::Vector3d::UnitZ());

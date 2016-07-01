@@ -22,6 +22,21 @@
 
 #include <terrain_slam/terrain_slam.h>
 #include <terrain_slam/outlier_remover.h>
+#include <terrain_slam/pcl_tools.h>
+
+#include <terrain_slam/features/features.h>
+#include <terrain_slam/features/keypoints.h>
+
+// Generic pcl
+#include <pcl/common/common.h>
+#include <pcl/features/intensity_spin.h>
+#include <pcl/point_types.h>
+#include <pcl/kdtree/kdtree_flann.h>
+#include <pcl/registration/icp.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl/registration/correspondence_estimation.h>
+#include <pcl/registration/correspondence_types.h>
+#include <pcl/visualization/histogram_visualizer.h>
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
@@ -34,8 +49,8 @@ namespace po = boost::program_options;
 using namespace std;
 using namespace cv;
 
-//terrain_slam::TerrainSlam::TerrainSlam(int argc, char **argv) : adj_(new Adjuster()), graph_(new Graph()) {
-terrain_slam::TerrainSlam::TerrainSlam(int argc, char **argv) : graph_(new Graph()) {
+terrain_slam::TerrainSlam::TerrainSlam(int argc, char **argv) : adj_(new Adjuster()), graph_(new Graph()) {
+// terrain_slam::TerrainSlam::TerrainSlam(int argc, char **argv) : graph_(new Graph()) {
   patch_size_ = 5.0;
   mean_k_     = 10;
   std_mult_   = 6.0;
@@ -120,8 +135,8 @@ void terrain_slam::TerrainSlam::process() {
       // findTransform(patches, id1, id2);
     }
 
-    std::cout << "[INFO]: Find transform between 21 and 14" << std::endl;
     findTransform(patches, 14, 21);
+    findTransform(patches, 0, 27);
 
     // Save results
     graph_->saveGraph();
@@ -372,15 +387,107 @@ terrain_slam::Transform
 terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
                                          int id1,
                                          int id2) {
+
+  if (false) {
+    // Convert cloud to PCL
+    typedef pcl::PointXYZ PT;
+    typedef pcl::PointCloud<PT> PC;
+    PC::Ptr source_cloud = pcl_tools::toPCL(c[id1]->getPoints(true, false));
+    PC::Ptr target_cloud = pcl_tools::toPCL(c[id2]->getPoints(true, false));
+
+    std::cout << "source_cloud->points.size() " << source_cloud->points.size() << std::endl;
+    std::cout << "target_cloud->points.size() " << target_cloud->points.size() << std::endl;
+
+    double feat_radius_search = 0.08;
+    double normal_radius_search = 0.05;
+
+    // Find keypoints
+    Keypoints kp(KP_HARRIS_3D, normal_radius_search);
+    PC::Ptr source_keypoints(new PC);
+    PC::Ptr target_keypoints(new PC);
+    kp.compute(source_cloud, source_keypoints);
+    kp.compute(target_cloud, target_keypoints);
+
+    std::cout << "source_keypoints->points.size() " << source_keypoints->points.size() << std::endl;
+    std::cout << "target_keypoints->points.size() " << target_keypoints->points.size() << std::endl;
+
+    // Extract features
+    pcl::PointCloud<pcl::Histogram<32> >::Ptr source_features(new pcl::PointCloud<pcl::Histogram<32> >);
+    pcl::PointCloud<pcl::Histogram<32> >::Ptr target_features(new pcl::PointCloud<pcl::Histogram<32> >);
+    pcl::PointCloud<pcl::PointXYZI>::Ptr source_intensities(new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::PointCloud<pcl::PointXYZI>::Ptr source_keypoint_intensities(new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::PointCloud<pcl::PointXYZI>::Ptr target_intensities(new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::PointCloud<pcl::PointXYZI>::Ptr target_keypoint_intensities(new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::PointCloud<pcl::IntensityGradient>::Ptr source_gradients(new pcl::PointCloud<pcl::IntensityGradient>);
+    pcl::PointCloud<pcl::IntensityGradient>::Ptr target_gradients(new pcl::PointCloud<pcl::IntensityGradient>);
+    pcl::PointCloud<pcl::Normal>::Ptr source_normals(new pcl::PointCloud<pcl::Normal>);
+    pcl::PointCloud<pcl::Normal>::Ptr target_normals(new pcl::PointCloud<pcl::Normal>);
+    Tools::estimateNormals(source_cloud, source_normals, normal_radius_search);
+    Tools::estimateNormals(target_cloud, target_normals, normal_radius_search);
+    Tools::PointCloudXYZtoXYZI(*source_keypoints, *source_keypoint_intensities);
+    Tools::PointCloudXYZtoXYZI(*target_keypoints, *target_keypoint_intensities);
+    Tools::PointCloudXYZtoXYZI(*source_cloud, *source_intensities);
+    Tools::PointCloudXYZtoXYZI(*target_cloud, *target_intensities);
+    Tools::computeGradient(source_intensities, source_normals, source_gradients, normal_radius_search);
+    Tools::computeGradient(target_intensities, target_normals, target_gradients, normal_radius_search);
+
+    std::cout << "source_keypoint_intensities->points.size() " << source_keypoint_intensities->points.size() << std::endl;
+    std::cout << "target_keypoint_intensities->points.size() " << target_keypoint_intensities->points.size() << std::endl;
+
+    std::cout << "source_gradients->points.size() " << source_gradients->points.size() << std::endl;
+    std::cout << "target_gradients->points.size() " << target_gradients->points.size() << std::endl;
+
+    pcl::RIFTEstimation<pcl::PointXYZI, pcl::IntensityGradient, pcl::Histogram<32> > rift;
+    rift.setRadiusSearch(feat_radius_search);
+    rift.setNrDistanceBins(4);
+    rift.setNrGradientBins(8);
+    rift.setInputCloud(source_keypoint_intensities);
+    rift.setSearchSurface(source_intensities);
+    rift.setInputGradient(source_gradients);
+    rift.compute(*source_features);
+    rift.setInputCloud(target_keypoint_intensities);
+    rift.setSearchSurface(target_intensities);
+    rift.setInputGradient(target_gradients);
+    rift.compute(*target_features);
+
+    std::cout << "source_features->points.size() " << source_features->points.size() << std::endl;
+    std::cout << "target_features->points.size() " << target_features->points.size() << std::endl;
+
+    pcl::visualization::PCLHistogramVisualizer viewer;
+    viewer.addFeatureHistogram(*source_features, 308);
+    viewer.spin();
+
+    int source_feat_size = source_features->points.size();
+    int target_feat_size = target_features->points.size();
+
+    // Find correspondences
+    pcl::CorrespondencesPtr correspondences(new pcl::Correspondences);
+    pcl::CorrespondencesPtr filtered_correspondences(new pcl::Correspondences);
+    Features<pcl::Histogram<32> > feat;
+    Eigen::Matrix4f ransac_tf;
+    feat.findCorrespondences(source_features, target_features, correspondences);
+    std::cout << "correspondences->size() " << correspondences->size() << std::endl;
+    feat.filterCorrespondences(source_keypoints, target_keypoints, correspondences, filtered_correspondences, ransac_tf);
+    std::cout << "filtered_correspondences->size() " << filtered_correspondences->size() << std::endl;
+
+    // Transform cloud
+    std::string clouds_dir("../adjusted/");
+    std::string pcd = std::to_string(id1) + "__" + std::to_string(id2) + "sift.pcd";
+    PC::Ptr output_ransac(new PC);
+    pcl::transformPointCloud(*source_cloud, *output_ransac, ransac_tf);
+    pcl::io::savePCDFile(clouds_dir + pcd, *output_ransac);
+
+  }
+
   // Adjust
   std::cout << "Adjusting " << id1 << " to " << id2 << "..." << std::endl;
-  adj_.reset(new BruteForceAdjuster(-5.0, 1.0,  // x
-                                    -1.0, 5.0,  // y
-                                    -0.2, 0.2,  // z
-                                      0, 0,  // yaw
-                                      0.2,       // x-y resolution
-                                      0.5,       // z resolution
-                                      0.5));    // yaw resolution
+  // adj_.reset(new BruteForceAdjuster(-7.0, 7.0,  // x
+  //                                   -7.0, 7.0,  // y
+  //                                     0, 0,  // z
+  //                                     0, 0,  // yaw
+  //                                     0.1,       // x-y resolution
+  //                                     0.5,       // z resolution
+  //                                     0.5));    // yaw resolution
   boost::shared_ptr<CloudPatch> c1(c.at(id1));
   boost::shared_ptr<CloudPatch> c2(c.at(id2));
   adj_->adjust(c1, c2);

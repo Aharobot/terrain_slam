@@ -31,6 +31,9 @@ public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   Eigen::Matrix4d T;
 
+  Transform() {
+    T.setIdentity(4, 4);
+  };
   Transform(const Eigen::Matrix4d& m);
   Transform(const Eigen::Vector3d& xyz, const Eigen::Vector3d& rpy);
   Transform(double x, double y, double z,
@@ -48,9 +51,10 @@ public:
   Eigen::Isometry3d getIsometry() const;
   Eigen::Vector3d getOrigin(void) const;
   Eigen::Vector3d getPosition(void) const;
+  Eigen::Quaternion<double> getRotation(void) const;
   void setTransform(const Eigen::Matrix4d &t);
 protected:
-  Eigen::Quaternion<double> rpy2Rot(const Eigen::Vector3d& rpy);
+  Eigen::Quaternion<double> rpy2Rot(const Eigen::Vector3d& rpy) const;
   Eigen::Matrix4d buildTransform(double x, double y, double z,
                                  double roll, double pitch, double yaw);
   Eigen::Matrix4d buildTransform(const Eigen::Quaternion<double> q,

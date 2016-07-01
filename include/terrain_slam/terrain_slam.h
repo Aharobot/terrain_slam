@@ -99,7 +99,8 @@ public:
 
   Transform findTransform(const std::vector<CloudPatchPtr> &c, int id1, int id2);
 
-  boost::shared_ptr<BruteForceAdjuster> adj_;
+  // boost::shared_ptr<BruteForceAdjuster> adj_;
+  boost::shared_ptr<Adjuster> adj_;
   boost::shared_ptr<Graph> graph_;
 
   std::string clouds_dir_;

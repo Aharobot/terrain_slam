@@ -55,7 +55,8 @@ public:
    * @param      cloud        The cloud
    */
   void adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
-              const boost::shared_ptr<CloudPatch> &cloud);
+              const boost::shared_ptr<CloudPatch> &cloud,
+              bool grid = true);
 
   /**
    * @brief Restarts the Ceres problem
@@ -101,22 +102,6 @@ private:
   double yaw_resolution_;
 };  // class
 
-// class PMAdjuster {
-// public:
-//   typedef PointMatcher<double> PM;
-//   typedef PM::DataPoints DP;
-
-//   PMAdjuster();
-//   void adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
-//               const boost::shared_ptr<CloudPatch> &cloud);
-// private:
-//   DP c1;
-//   DP c2;
-
-//   void copy2PM(const boost::shared_ptr<CloudPatch> &cp,
-//                DP& dp);
-// };  // class
-
 /**
  * @brief I am implementing the Iterative Closest Point Algorithm where the
  * residual is defined as follows:
@@ -129,8 +114,9 @@ class AdjusterCostFunctor {
 public:
   AdjusterCostFunctor(const boost::shared_ptr<CloudPatch> &c,
                       const Eigen::Vector4d &pt,
+                      const bool& grid,
                       const double& r, const double& p)
-      : c_(c), p_(pt), roll(r), pitch(p) {
+      : c_(c), p_(pt), roll(r), pitch(p), grid_(grid) {
     // empty
   }
 
@@ -146,8 +132,6 @@ public:
     double ty    = *_ty;
     double tz    = *_tz;
     double yaw   = *_yaw;
-
-    // std::cout << "Cost: " << tx << ", " << ty << ", " << tz << ", " << roll << ", " << pitch << ", " << yaw << ", " << std::endl;
 
     // Set the transformation matrix
     Eigen::Matrix4d T;
@@ -165,35 +149,37 @@ public:
     Eigen::Vector4d pt = T * p;
 
     // Find three closest points in cloud
-    std::vector<Eigen::Vector4d> nn = c_->kNN(pt, 3);
+    std::vector<Eigen::Vector4d> nn = c_->kNN(pt, 1, grid_);
 
-    Eigen::Vector3d p1(nn.at(0).hnormalized());
-    Eigen::Vector3d p2(nn.at(1).hnormalized());
-    Eigen::Vector3d p3(nn.at(2).hnormalized());
+    // Calculate distance to point
+    Eigen::Vector4d p1(nn.at(0));
+    Eigen::Vector4d v1 = pt - p1;
 
-    // Calculate distance to plane
-    Eigen::Vector3d v1 = p2 - p1;
-    Eigen::Vector3d v2 = p3 - p1;
-    Eigen::Vector3d w1 = pt.hnormalized() - p1;
-    Eigen::Vector3d w2 = pt.hnormalized() - p2;
-    Eigen::Vector3d w3 = pt.hnormalized() - p3;
-    Eigen::Vector3d n  = v1.cross(v2);
-    // residuals[0] = n.dot(w) / n.norm();
-    residuals[0] = w1(0);
-    residuals[1] = w1(1);
-    residuals[2] = w1(2);
-    residuals[3] = w2(0);
-    residuals[4] = w2(1);
-    residuals[5] = w2(2);
-    residuals[6] = w3(0);
-    residuals[7] = w3(1);
-    residuals[8] = w3(2);
+    // Decrease cost if points are away from camera
+    double z_dist = std::abs(v1(2));
+
+    double cam_z_dist = abs(pt(2));
+
+    double min_z = 1.0;
+    double max_z = 10.0;
+    double max_z_multiplier = 100.0;
+    double z_multiplier = 1.0;
+
+    if (cam_z_dist < max_z && cam_z_dist > min_z) {
+      z_multiplier = max_z_multiplier*(1 - (max_z - cam_z_dist) / (max_z - min_z));
+    }
+
+    residuals[0] = v1(0);
+    residuals[1] = v1(1);
+    residuals[2] = v1(2)*z_multiplier;
+
     return true;
   }
 
 protected:
   boost::shared_ptr<CloudPatch> c_;
   Eigen::Vector4d p_;
+  bool grid_;
   double roll;
   double pitch;
 };  // class

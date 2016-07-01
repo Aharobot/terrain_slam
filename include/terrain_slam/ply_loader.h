@@ -41,11 +41,11 @@ public:
       bool header = true;
       std::vector<Eigen::Vector4d> pts;
       while (std::getline(infile, line)) {
-        if (line.compare("end_header") == 0) header = false;
         if (!header) {
           Eigen::Vector4d p = readPoint(line);
           pts.push_back(p);
         }
+        if (line.compare("end_header") == 0) header = false;
       }
       infile.close();
 

@@ -85,13 +85,15 @@ public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   Eigen::Matrix4Xd points;
 
+  CloudPatch() {};
+
   CloudPatch(const std::vector<LaserLine>& lines, int start_idx, int end_idx);
 
   void add(const LaserLine& line);
 
   void grid(double resolution = 0.1, double search_radius = 0.1);
 
-  std::vector<Eigen::Vector4d> kNN(const Eigen::Vector4d& q, int k) const ;
+  std::vector<Eigen::Vector4d> kNN(const Eigen::Vector4d& q, int k, bool grid = true) const ;
 
   /**
    * @brief      Loads a PLY into an eigen matrix
@@ -196,6 +198,16 @@ public:
    */
   void overlap(const CloudPatch& other, CloudPatch& overlap);
 
+  bool getMinMax(double &min_x, double &min_y, double &max_x, double &max_y);
+
+  void createkNN(void);
+
+  void copy2Grid(void) {
+    grid_ = points;
+    nns_.reset(Nabo::NNSearchD::createKDTreeLinearHeap(grid_));
+    gridded_ = true;
+  }
+
 protected:
   bool gridded_;
   double grid_resolution_;
@@ -205,6 +217,7 @@ protected:
   std::vector<LaserLine> lines_;
   Eigen::MatrixXd grid_;
   boost::shared_ptr<Nabo::NNSearchD> nns_;
+  boost::shared_ptr<Nabo::NNSearchD> nns_c_;
 
   /**
    * @brief      Transform the laser line to the local coordinate frame of the
