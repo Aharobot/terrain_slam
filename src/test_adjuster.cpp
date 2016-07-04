@@ -29,30 +29,46 @@
 #include <pcl/common/common.h>
 
 #include <iostream>
+#include <fstream>
+#include <random>
 
-void fillData(int num_points, boost::shared_ptr<terrain_slam::CloudPatch>& c1, boost::shared_ptr<terrain_slam::CloudPatch>& c2) {
+void fillData(int num_points, double overlap, boost::shared_ptr<terrain_slam::CloudPatch>& c1, boost::shared_ptr<terrain_slam::CloudPatch>& c2) {
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_real_distribution<> dis(-1, +1);
+  int inliers = num_points*overlap;
+  // std::cout << "Generating " << inliers << " inliers out of " << num_points << std::endl;
+  int outliers = num_points - inliers;
   c1->points.resize(4, num_points);
   c2->points.resize(4, num_points);
-  for (size_t i = 0; i < num_points; ++i)
-  {
+  for (size_t i = 0; i < num_points; ++i) {
     Eigen::Vector4d v;
-    v(0) = 1024 * rand() / (RAND_MAX + 1.0);
-    v(1) = 1024 * rand() / (RAND_MAX + 1.0);
-    v(2) = 1024 * rand() / (RAND_MAX + 1.0);
+    v(0) = dis(gen)*6.0;
+    v(1) = dis(gen)*6.0;
+    v(2) = dis(gen)*2.0;
     v(3) = 1.0;
     c1->points.col(i) = v;
-    std::cout << "Creating point at (" << v(0) << ", " << v(1) << ", " << v(2) << ")" << std::endl;
+    // std::cout << "Creating point at (" << v(0) << ", " << v(1) << ", " << v(2) << ")" << std::endl;
   }
 
   for (size_t i = 0; i < num_points; ++i) {
-    Eigen::Vector4d v = c1->points.col(i);
-    v(0) -= 0.7;
-    // add noise
-    v(0) += rand()*0.2 / (RAND_MAX + 1.0);
-    v(1) += rand()*0.2 / (RAND_MAX + 1.0);
-    v(1) += rand()*0.2 / (RAND_MAX + 1.0);
+    Eigen::Vector4d v;
+
+    if (i < inliers) {
+      v = c1->points.col(i);
+      v(0) -= 0.7;
+      // add noise
+      v(0) += dis(gen)*0.2 / (RAND_MAX + 1.0);
+      v(1) += dis(gen)*0.2 / (RAND_MAX + 1.0);
+      v(1) += dis(gen)*0.2 / (RAND_MAX + 1.0);
+    } else {
+      v(0) = dis(gen)*6.0;
+      v(1) = dis(gen)*6.0;
+      v(2) = dis(gen)*2.0;
+      v(3) = 1.0;
+    }
     c2->points.col(i) = v;
-    std::cout << "Creating point at (" << v(0) << ", " << v(1) << ", " << v(2) << ")" << std::endl;
+    // std::cout << "Creating point at (" << v(0) << ", " << v(1) << ", " << v(2) << ")" << std::endl;
   }
 }
 
@@ -61,17 +77,74 @@ int main(int argc, char** argv) {
   boost::shared_ptr<terrain_slam::CloudPatch> c1(new terrain_slam::CloudPatch());
   boost::shared_ptr<terrain_slam::CloudPatch> c2(new terrain_slam::CloudPatch());
   std::cout << "Filling cloud data... " << std::endl;
-  fillData(10, c1, c2);
-  c1->save(0, std::string("../adjusted/original"), std::string(""));
-  c2->save(1, std::string("../adjusted/original"), std::string(""));
-  c1->copy2Grid();
-  c2->copy2Grid();
-  c2->T(0,3) = 0;
-  c2->T(1,3) = 0;
-  c1->setId(0);
-  c2->setId(1);
-  terrain_slam::Adjuster adj;
-  std::cout << "Adjusting... " << std::endl;
-  adj.adjust(c1, c2);
+
+  double overlap = 0;
+  double x = 0;
+  double y = 0;
+  double z = 0;
+
+  std::vector<std::vector<double> > output(500000, std::vector<double>(6));
+
+  int xM = 10;
+  int iM = 50;
+
+  #pragma omp parallel for collapse(5)
+  for (size_t o = 0; o < xM; o++) {
+    for (size_t xi = 0; xi < xM; xi++) {
+      for (size_t yi = 0; yi < xM; yi++) {
+        for (size_t zi = 0; zi < xM; zi++) {
+          for (size_t i = 0; i < iM; i++) {
+            overlap = static_cast<double>(o)/10.0;
+            x = 0.5*static_cast<double>(xi);
+            y = 0.5*static_cast<double>(yi);
+            z = 0.5*static_cast<double>(zi);
+            boost::shared_ptr<terrain_slam::CloudPatch> c1(new terrain_slam::CloudPatch());
+            boost::shared_ptr<terrain_slam::CloudPatch> c2(new terrain_slam::CloudPatch());
+            fillData(100, overlap, c1, c2);
+            // c1->save(0, std::string("../adjusted/original"), std::string(""));
+            // c2->save(1, std::string("../adjusted/original"), std::string(""));
+            c1->copy2Grid();
+            c2->copy2Grid();
+            c2->T(0,3) = x;
+            c2->T(1,3) = y;
+            c2->T(2,3) = z;
+            c1->setId(100*i+0);
+            c2->setId(100*i+1);
+            terrain_slam::Adjuster adj;
+            // std::cout << "Adjusting... " << std::endl;
+            terrain_slam::Transform new_tf = adj.adjust(c1, c2);
+            double dx = std::abs(new_tf.tx()) - 0.7;
+            double dy = std::abs(new_tf.ty());
+            double dz = std::abs(new_tf.tz());
+            double error = sqrt(dx*dx+dy*dy+dz*dz);
+            // std::cout << "Error: " << error << std::endl;
+            output[i+iM*zi+iM*xM*yi+iM*xM*xM*xi+iM*xM*xM*xM*o][0] = overlap;
+            output[i+iM*zi+iM*xM*yi+iM*xM*xM*xi+iM*xM*xM*xM*o][1] = x;
+            output[i+iM*zi+iM*xM*yi+iM*xM*xM*xi+iM*xM*xM*xM*o][2] = y;
+            output[i+iM*zi+iM*xM*yi+iM*xM*xM*xi+iM*xM*xM*xM*o][3] = z;
+            output[i+iM*zi+iM*xM*yi+iM*xM*xM*xi+iM*xM*xM*xM*o][4] = i;
+            output[i+iM*zi+iM*xM*yi+iM*xM*xM*xi+iM*xM*xM*xM*o][5] = error;
+          }
+        }
+      }
+    }
+  }
+
+  std::ofstream myfile("example.csv");
+  if (!myfile.is_open()) {
+    std::cout << "Can't open file " << std::endl;
+    return 0;
+  }
+  //myfile << "ovelap,x,y,z,i,error\n";
+
+  for (size_t i = 0; i < output.size(); i++) {
+    myfile << output[i][0] << ","
+           << output[i][1] << ","
+           << output[i][2] << ","
+           << output[i][3] << ","
+           << output[i][4] << ","
+           << output[i][5] << "\n";
+  }
+  myfile.close();
   return 0;
 }
