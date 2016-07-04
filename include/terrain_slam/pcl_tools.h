@@ -28,6 +28,8 @@
 
 typedef pcl::PointXYZ PointT;
 typedef pcl::PointCloud<PointT> CloudT;
+typedef pcl::Normal Normal;
+typedef pcl::PointCloud<Normal> CloudN;
 
 namespace pcl_tools {
 
@@ -69,6 +71,38 @@ static Eigen::Matrix4Xd fromPCL(const CloudT::Ptr& cloud) {
     points(2, i) = cloud->points[i].z;
   }
   return points;
+}
+
+/**
+ * @brief      Estimates the normals of a pointcloud
+ *
+ * @param[in]  m     Pointcloud (eigen)
+ *
+ * @return     Estimated normals (eigen pointcloud)
+ */
+static Eigen::Matrix4Xd estimateNormals(const Eigen::Matrix4Xd& m) {
+
+  CloudT::Ptr cloud = toPCL(m);
+
+  // Create the normal estimation class, and pass the input dataset to it
+  pcl::NormalEstimation<PointT, Normal> ne;
+  ne.setInputCloud(cloud);
+
+  // Create an empty kdtree representation, and pass it to the normal estimation object.
+  // Its content will be filled inside the object, based on the given input dataset (as no other search surface is given).
+  pcl::search::KdTree<PointT>::Ptr tree(new pcl::search::KdTree<PointT> ());
+  ne.setSearchMethod (tree);
+
+  // Output datasets
+  pcl::PointCloud<Normal>::Ptr cloud_normals(new CloudN);
+
+  // Use all neighbors in a sphere of radius 10cm
+  ne.setRadiusSearch(0.1);
+
+  // Compute the features
+  ne.compute(*cloud_normals);
+
+  return fromPCL(cloud_normals);
 }
 
 }  // namespace
