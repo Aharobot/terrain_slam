@@ -54,7 +54,7 @@ public:
    * @param      cloud_fixed  The cloud fixed
    * @param      cloud        The cloud
    */
-  void adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
+  Transform adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
               const boost::shared_ptr<CloudPatch> &cloud,
               bool grid = true);
 

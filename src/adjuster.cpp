@@ -53,7 +53,8 @@ void terrain_slam::Adjuster::reset() {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
+terrain_slam::Transform
+terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
                                     const boost::shared_ptr<CloudPatch> &cloud,
                                     bool grid) {
   boost::mutex::scoped_lock lock(mutex_adjuster_);
@@ -110,13 +111,14 @@ void terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_f
   solver_options.parameter_tolerance = 1e-18;
   solver_options.function_tolerance  = 1e-18;  // default 1e-6
   solver_options.gradient_tolerance  = 1e-18;
+  solver_options.minimizer_progress_to_stdout = false;
 
   ceres::Solver::Summary sum;
   ceres::Solve(solver_options, problem_, &sum);
-  std::cout << sum.FullReport() << "\n";
+  // std::cout << sum.FullReport() << "\n";
 
-  std::cout << "Before: (" << relative.tx() << ", " << relative.ty() << ", " << relative.tz() << "); (" << relative.roll() << ", " << relative.pitch() << ", " << relative.yaw() << ")" << std::endl;
-  std::cout << "After:  (" << tx << ", " << ty << ", " << tz << "); (" << roll << ", " << pitch << ", " << yaw << ")" << std::endl;
+  // std::cout << "Before: (" << relative.tx() << ", " << relative.ty() << ", " << relative.tz() << "); (" << relative.roll() << ", " << relative.pitch() << ", " << relative.yaw() << ")" << std::endl;
+  // std::cout << "After:  (" << tx << ", " << ty << ", " << tz << "); (" << roll << ", " << pitch << ", " << yaw << ")" << std::endl;
 
   // save
   Transform new_tf(tx, ty, tz, roll, pitch, yaw);
@@ -124,10 +126,12 @@ void terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_f
   std::string path("../adjusted");
   std::ostringstream suffix;
   suffix << "_" << cloud_fixed->getId() << "_" << cloud->getId();
-  cloud_fixed->save(cloud_fixed->getId(), path, suffix.str(), false, true);
+  // cloud_fixed->save(cloud_fixed->getId(), path, suffix.str(), false, true);
 
   cloud->setTransform(cloud_fixed->T * new_tf.T);
-  cloud->save(cloud->getId(), path, suffix.str(), false, true);
+  // cloud->save(cloud->getId(), path, suffix.str(), false, true);
+
+  return new_tf;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
