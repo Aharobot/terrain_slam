@@ -23,24 +23,15 @@
 #include <terrain_slam/terrain_slam.h>
 #include <terrain_slam/outlier_remover.h>
 #include <terrain_slam/pcl_tools.h>
+#include <terrain_slam/csv.h>
 
 #include <terrain_slam/features/features.h>
 #include <terrain_slam/features/keypoints.h>
 
-// Generic pcl
-#include <pcl/common/common.h>
-#include <pcl/features/intensity_spin.h>
-#include <pcl/point_types.h>
-#include <pcl/kdtree/kdtree_flann.h>
-#include <pcl/registration/icp.h>
-#include <pcl/io/pcd_io.h>
-#include <pcl/registration/correspondence_estimation.h>
-#include <pcl/registration/correspondence_types.h>
-#include <pcl/visualization/histogram_visualizer.h>
-
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/shared_ptr.hpp>
+#include <boost/lexical_cast.hpp>
 #include <fstream>
 #include <iostream>
 #include <iomanip>
@@ -48,6 +39,8 @@
 namespace po = boost::program_options;
 using namespace std;
 using namespace cv;
+
+////////////////////////////////////////////////////////////////////////////////
 
 terrain_slam::TerrainSlam::TerrainSlam(int argc, char **argv) : adj_(new Adjuster()), graph_(new Graph()) {
 // terrain_slam::TerrainSlam::TerrainSlam(int argc, char **argv) : graph_(new Graph()) {
@@ -113,7 +106,7 @@ void terrain_slam::TerrainSlam::process() {
   // Retrieve list of files
   vector<string> cloud_names;
   vector<string> cloud_paths;
-  bool files_found = getCloudPaths(clouds_dir_, "yml", cloud_names, cloud_paths);
+  bool files_found = getCloudPaths(clouds_dir_, "csv", cloud_names, cloud_paths);
 
   if (files_found) {
     vector<LaserLine> lines;
@@ -121,22 +114,21 @@ void terrain_slam::TerrainSlam::process() {
     readFiles(cloud_names, cloud_paths, lines);
 
     // Create required length patches
-    vector<CloudPatchPtr> patches;
-    createPatches(lines, patches);
+    createPatches(lines, patches_);
 
     // Search for overlapping patches
     vector<pair<int, int> > candidates;
-    lookForCandidates(patches, candidates);
+    lookForCandidates(patches_, candidates);
 
     for (size_t i = 0; i < candidates.size(); i++) {
       int id1 = candidates[i].first;
       int id2 = candidates[i].second;
       // std::cout << "[INFO]: Find transform between " << id1 << " and " << id2 << std::endl;
-      // findTransform(patches, id1, id2);
+      // findTransform(patches_, id1, id2);
     }
 
-    findTransform(patches, 14, 21);
-    findTransform(patches, 0, 27);
+    findTransform(patches_, 14, 21);
+    findTransform(patches_, 0, 27);
 
     // Save results
     graph_->saveGraph();
@@ -216,61 +208,72 @@ void terrain_slam::TerrainSlam::readFiles(const vector<string> &cloud_names,
                                           vector<LaserLine>& lines) {
   for (size_t i = 0; i < cloud_paths.size(); i++) {
     if (debug_) cout << cloud_names[i] << " ";
-    FileStorage fs;
-    fs.open(cloud_paths[i], FileStorage::READ);
 
-    if (fs.isOpened()) {
-      vector<cv::Point3d> points;
-      cv::Point3d robot_position, robot_orientation, camera_position,
-          camera_orientation;
-      fs["points"] >> points;
-      fs["robot_position"] >> robot_position;
-      fs["robot_orientation"] >> robot_orientation;
-      fs["camera_position"] >> camera_position;
-      fs["camera_orientation"] >> camera_orientation;
-
-      // check points
-      if (debug_) cout << points.size() << " ";
-      // add only if there are points
-      if (points.size() > 0) {
-        // int k = 0;
-        // k = preprocessPoints(points);
-        // if (debug_) cout << k << " ";
-
-        Eigen::Vector3d xyz = cv2eigen(robot_position);
-        Eigen::Vector3d rpy = cv2eigen(robot_orientation) * M_PI / 180.0;
-
-        LaserLine line(points.size(), xyz, rpy);
-        for (size_t j = 0; j < points.size(); j++) {
-          line.add(cv2eigen(points[j]), j);
-        }
-
-        line.setId(i);
-        line.setFilename(cloud_names[i]);
-
-        // Filter line, remove outliers
-        if (points.size() > 10 && filter_) {
-          OutlierRemover sor;
-          sor.setInput(line.points);
-          sor.setMeanK(mean_k_);
-          sor.setStdThresh(std_mult_);
-          Eigen::MatrixXd output;
-          sor.filter(output);
-          line.points.resize(output.rows(), output.cols());
-          line.points = output;
-        }
-
-        if (debug_) cout << points.size() - line.points.cols() << " ";
-
-        lines.push_back(line);
-
-        if (debug_) cout << line.points.cols() << endl;
+    ifstream fs(cloud_paths[i]);
+    if (!fs.is_open()) {
+      std::cout << "Can't open file " << cloud_paths[i] << std::endl;
+      return;
+    }
+    Eigen::Vector3d robot_xyz;
+    Eigen::Vector3d robot_rpy;
+    Eigen::Vector3d p;
+    int lineno = 0;
+    int num_points = 0;
+    vector<Eigen::Vector3d> points;
+    for(CSVIterator loop(fs); loop != CSVIterator(); ++loop) {
+      // for (size_t ii = 0; ii < (*loop).size(); ii++)
+      //   std::cout << "(*loop)[" << ii << "]: " << (*loop)[ii] << std::endl;
+      if (lineno == 0) {
+        num_points = boost::lexical_cast<int>((*loop)[0]);
+      } else if (lineno == 1) {
+        robot_xyz(0) = boost::lexical_cast<double>((*loop)[0]);
+        robot_xyz(1) = boost::lexical_cast<double>((*loop)[1]);
+        robot_xyz(2) = boost::lexical_cast<double>((*loop)[2]);
+        robot_rpy(0) = boost::lexical_cast<double>((*loop)[3]);
+        robot_rpy(1) = boost::lexical_cast<double>((*loop)[4]);
+        robot_rpy(2) = boost::lexical_cast<double>((*loop)[5]);
+        robot_rpy *= M_PI/180.0;
       } else {
-        cout << "[WARN]: Empty pointcloud in " << cloud_names[i] << endl;;
+        Eigen::Vector3d p;
+        p(0) = boost::lexical_cast<double>((*loop)[0]);
+        p(1) = boost::lexical_cast<double>((*loop)[1]);
+        p(2) = boost::lexical_cast<double>((*loop)[2]);
+        points.push_back(p);
       }
+      lineno++;
+    }
+
+    // check points
+    if (debug_) cout << points.size() << " ";
+    // add only if there are points
+    if (points.size() > 0) {
+      LaserLine line(points.size(), robot_xyz, robot_rpy);
+      for (size_t j = 0; j < points.size(); j++) {
+        line.add(points[j], j);
+      }
+
+      line.setId(i);
+      line.setFilename(cloud_names[i]);
+
+      // Filter line, remove outliers
+      if (points.size() > 10 && filter_) {
+        OutlierRemover sor;
+        sor.setInput(line.points);
+        sor.setMeanK(mean_k_);
+        sor.setStdThresh(std_mult_);
+        Eigen::MatrixXd output;
+        sor.filter(output);
+        line.points.resize(output.rows(), output.cols());
+        line.points = output;
+      }
+
+      if (debug_) cout << points.size() - line.points.cols() << " ";
+
+      lines.push_back(line);
+
+      if (debug_) cout << line.points.cols() << endl;
     } else {
-      cout << "[ERROR]: Unable to open camera pose file at " << cloud_paths[i]
-           << ".  Please verify the path." << endl;
+      cout << "[WARN]: Empty pointcloud in " << cloud_names[i] << endl;;
     }
   }
   cout << "[INFO]: Clouds loaded! " << endl;
@@ -346,12 +349,12 @@ terrain_slam::TerrainSlam::createPatches(
     }
   }
 
-  // Grid patches
-  std::cout << "[INFO]: Gridding... (parallel)" << std::endl;
-#pragma omp parallel for
-  for (size_t i = 0; i < patches.size(); i++) {
-    patches.at(i)->grid();
-  }
+//   // Grid patches
+//   std::cout << "[INFO]: Gridding... (parallel)" << std::endl;
+// #pragma omp parallel for
+//   for (size_t i = 0; i < patches.size(); i++) {
+//     patches.at(i)->grid();
+//   }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -387,98 +390,6 @@ terrain_slam::Transform
 terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
                                          int id1,
                                          int id2) {
-
-  if (false) {
-    // Convert cloud to PCL
-    typedef pcl::PointXYZ PT;
-    typedef pcl::PointCloud<PT> PC;
-    PC::Ptr source_cloud = pcl_tools::toPCL(c[id1]->getPoints(true, false));
-    PC::Ptr target_cloud = pcl_tools::toPCL(c[id2]->getPoints(true, false));
-
-    std::cout << "source_cloud->points.size() " << source_cloud->points.size() << std::endl;
-    std::cout << "target_cloud->points.size() " << target_cloud->points.size() << std::endl;
-
-    double feat_radius_search = 0.08;
-    double normal_radius_search = 0.05;
-
-    // Find keypoints
-    Keypoints kp(KP_HARRIS_3D, normal_radius_search);
-    PC::Ptr source_keypoints(new PC);
-    PC::Ptr target_keypoints(new PC);
-    kp.compute(source_cloud, source_keypoints);
-    kp.compute(target_cloud, target_keypoints);
-
-    std::cout << "source_keypoints->points.size() " << source_keypoints->points.size() << std::endl;
-    std::cout << "target_keypoints->points.size() " << target_keypoints->points.size() << std::endl;
-
-    // Extract features
-    pcl::PointCloud<pcl::Histogram<32> >::Ptr source_features(new pcl::PointCloud<pcl::Histogram<32> >);
-    pcl::PointCloud<pcl::Histogram<32> >::Ptr target_features(new pcl::PointCloud<pcl::Histogram<32> >);
-    pcl::PointCloud<pcl::PointXYZI>::Ptr source_intensities(new pcl::PointCloud<pcl::PointXYZI>);
-    pcl::PointCloud<pcl::PointXYZI>::Ptr source_keypoint_intensities(new pcl::PointCloud<pcl::PointXYZI>);
-    pcl::PointCloud<pcl::PointXYZI>::Ptr target_intensities(new pcl::PointCloud<pcl::PointXYZI>);
-    pcl::PointCloud<pcl::PointXYZI>::Ptr target_keypoint_intensities(new pcl::PointCloud<pcl::PointXYZI>);
-    pcl::PointCloud<pcl::IntensityGradient>::Ptr source_gradients(new pcl::PointCloud<pcl::IntensityGradient>);
-    pcl::PointCloud<pcl::IntensityGradient>::Ptr target_gradients(new pcl::PointCloud<pcl::IntensityGradient>);
-    pcl::PointCloud<pcl::Normal>::Ptr source_normals(new pcl::PointCloud<pcl::Normal>);
-    pcl::PointCloud<pcl::Normal>::Ptr target_normals(new pcl::PointCloud<pcl::Normal>);
-    Tools::estimateNormals(source_cloud, source_normals, normal_radius_search);
-    Tools::estimateNormals(target_cloud, target_normals, normal_radius_search);
-    Tools::PointCloudXYZtoXYZI(*source_keypoints, *source_keypoint_intensities);
-    Tools::PointCloudXYZtoXYZI(*target_keypoints, *target_keypoint_intensities);
-    Tools::PointCloudXYZtoXYZI(*source_cloud, *source_intensities);
-    Tools::PointCloudXYZtoXYZI(*target_cloud, *target_intensities);
-    Tools::computeGradient(source_intensities, source_normals, source_gradients, normal_radius_search);
-    Tools::computeGradient(target_intensities, target_normals, target_gradients, normal_radius_search);
-
-    std::cout << "source_keypoint_intensities->points.size() " << source_keypoint_intensities->points.size() << std::endl;
-    std::cout << "target_keypoint_intensities->points.size() " << target_keypoint_intensities->points.size() << std::endl;
-
-    std::cout << "source_gradients->points.size() " << source_gradients->points.size() << std::endl;
-    std::cout << "target_gradients->points.size() " << target_gradients->points.size() << std::endl;
-
-    pcl::RIFTEstimation<pcl::PointXYZI, pcl::IntensityGradient, pcl::Histogram<32> > rift;
-    rift.setRadiusSearch(feat_radius_search);
-    rift.setNrDistanceBins(4);
-    rift.setNrGradientBins(8);
-    rift.setInputCloud(source_keypoint_intensities);
-    rift.setSearchSurface(source_intensities);
-    rift.setInputGradient(source_gradients);
-    rift.compute(*source_features);
-    rift.setInputCloud(target_keypoint_intensities);
-    rift.setSearchSurface(target_intensities);
-    rift.setInputGradient(target_gradients);
-    rift.compute(*target_features);
-
-    std::cout << "source_features->points.size() " << source_features->points.size() << std::endl;
-    std::cout << "target_features->points.size() " << target_features->points.size() << std::endl;
-
-    pcl::visualization::PCLHistogramVisualizer viewer;
-    viewer.addFeatureHistogram(*source_features, 308);
-    viewer.spin();
-
-    int source_feat_size = source_features->points.size();
-    int target_feat_size = target_features->points.size();
-
-    // Find correspondences
-    pcl::CorrespondencesPtr correspondences(new pcl::Correspondences);
-    pcl::CorrespondencesPtr filtered_correspondences(new pcl::Correspondences);
-    Features<pcl::Histogram<32> > feat;
-    Eigen::Matrix4f ransac_tf;
-    feat.findCorrespondences(source_features, target_features, correspondences);
-    std::cout << "correspondences->size() " << correspondences->size() << std::endl;
-    feat.filterCorrespondences(source_keypoints, target_keypoints, correspondences, filtered_correspondences, ransac_tf);
-    std::cout << "filtered_correspondences->size() " << filtered_correspondences->size() << std::endl;
-
-    // Transform cloud
-    std::string clouds_dir("../adjusted/");
-    std::string pcd = std::to_string(id1) + "__" + std::to_string(id2) + "sift.pcd";
-    PC::Ptr output_ransac(new PC);
-    pcl::transformPointCloud(*source_cloud, *output_ransac, ransac_tf);
-    pcl::io::savePCDFile(clouds_dir + pcd, *output_ransac);
-
-  }
-
   // Adjust
   std::cout << "Adjusting " << id1 << " to " << id2 << "..." << std::endl;
   // adj_.reset(new BruteForceAdjuster(-7.0, 7.0,  // x
@@ -490,8 +401,151 @@ terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
   //                                     0.5));    // yaw resolution
   boost::shared_ptr<CloudPatch> c1(c.at(id1));
   boost::shared_ptr<CloudPatch> c2(c.at(id2));
-  adj_->adjust(c1, c2);
-  std::cout << "Done!" << std::endl;
+  // c1->save(id1, std::string("../adjusted"));
+  // c2->save(id2, std::string("../adjusted"));
+
+
+  // Get data
+  Eigen::Matrix4d relative = c1->T.inverse()*c2->T;
+  bool local_frame = true;
+  bool use_grid = false;
+  Eigen::Matrix4Xd p1 = c1->getPoints(local_frame, use_grid);
+  Eigen::Matrix4Xd p2 = c2->getPoints(local_frame, use_grid);
+
+  // Convert cloud to PCL
+  std::cout << "Converting cloud to PCL..." << std::endl;
+  PC::Ptr source_cloud = pcl_tools::toPCL(p1);
+  PC::Ptr target_cloud = pcl_tools::toPCL(p2);
+  pcl_tools::saveCloud(source_cloud, "orig", id1);
+  pcl_tools::saveCloud(target_cloud, "orig", id2);
+
+  PC::Ptr source_grid(new PC);
+  PC::Ptr target_grid(new PC);
+  pcl_tools::voxelGrid(source_cloud, 0.25, source_grid);
+  pcl_tools::voxelGrid(target_cloud, 0.25, target_grid);
+
+  // Converting it back
+  std::cout << "Converting back to Eigen..." << std::endl;
+  Eigen::Matrix4Xd p3 = pcl_tools::fromPCL(source_grid);
+  Eigen::Matrix4Xd p4 = pcl_tools::fromPCL(target_grid);
+  c1->points = p3;
+  c1->copy2Grid();
+  c2->points = p4;
+  c2->copy2Grid();
+
+  pcl_tools::saveCloud(source_grid, "grid", id1);
+  pcl_tools::saveCloud(target_grid, "grid", id2);
+
+  std::cout << "Running adjuster... " << std::endl;
+  Transform t = adj_->adjust(c1, c2);
+
+  PC::Ptr target_tf(new PC);
+  pcl::transformPointCloud(*target_grid, *target_tf, t.tf());
+  pcl_tools::saveCloud(target_tf, "tf", id2);
+
+
+  c1->save(id1, std::string("../adjusted"), std::string("post"), true, false);
+  c2->save(id2, std::string("../adjusted"), std::string("post"), true, false);
+
+  // // Smooth clouds
+  // std::cout << "Smoothing clouds..." << std::endl;
+  // PC::Ptr source_smoothed(new PC);
+  // PC::Ptr target_smoothed(new PC);
+  // pcl_tools::smooth(source_cloud, source_smoothed);
+  // pcl_tools::smooth(target_cloud, target_smoothed);
+  // pcl_tools::saveCloud(source_smoothed, "smooth", id1);
+  // pcl_tools::saveCloud(target_smoothed, "smooth", id2);
+
+  // // Remove outliers
+  // std::cout << "Removing outliers..." << std::endl;
+  // PC::Ptr source_filt(new PC);
+  // PC::Ptr target_filt(new PC);
+  // double min_z = 0.5;   // m
+  // double max_z = 10.0;  // m
+  // double neighbors_radius = 0.4;  // m
+  // int min_neighbors = 40;
+  // pcl_tools::removeOutliers(source_smoothed, min_z, max_z, neighbors_radius, min_neighbors, source_filt);
+  // pcl_tools::removeOutliers(target_smoothed, min_z, max_z, neighbors_radius, min_neighbors, target_filt);
+  // pcl_tools::saveCloud(source_filt, "outl", id1);
+  // pcl_tools::saveCloud(target_filt, "outl", id2);
+
+  // // Sampling the cloud
+  // std::cout << "Sampling the cloud..." << std::endl;
+  // PC::Ptr source_grid(new PC);
+  // PC::Ptr target_grid(new PC);
+  // int num_points = 2000;
+  // double radius_search = 0.25;
+  // pcl_tools::randomlySample(source_filt, num_points, radius_search, source_grid);
+  // pcl_tools::randomlySample(target_filt, num_points, radius_search, target_grid);
+  // pcl_tools::saveCloud(source_grid, "grid", id1);
+  // pcl_tools::saveCloud(target_grid, "grid", id2);
+
+  // // Exaggerate Z component
+  // std::cout << "Exaggerating Z component..." << std::endl;
+  // PC::Ptr source_ex(new PC);
+  // PC::Ptr target_ex(new PC);
+  // double multiplier = 4.0;
+  // // pcl_tools::exaggerateZ(source_grid, multiplier, source_ex);
+  // // pcl_tools::exaggerateZ(target_grid, multiplier, target_ex);
+  // // pcl_tools::saveCloud(source_ex, "exag", id1);
+  // // pcl_tools::saveCloud(target_ex, "exag", id2);
+
+  // // Converting it back
+  // std::cout << "Converting back to Eigen..." << std::endl;
+  // Eigen::Matrix4Xd p3 = pcl_tools::fromPCL(source_grid);
+  // Eigen::Matrix4Xd p4 = pcl_tools::fromPCL(target_grid);
+  // c1->points = p3;
+  // c1->copy2Grid();
+  // c2->points = p4;
+  // c2->copy2Grid();
+
+  // c1->save(id1, std::string("../adjusted"));
+  // c2->save(id2, std::string("../adjusted"));
+
+  // std::cout << "Running adjuster... " << std::endl;
+  // Transform t = adj_->adjust(c1, c2);
+
+  // return t;
+
+  // // Compute normals
+  // std::cout << "Computing normals..." << std::endl;
+  // PCN::Ptr source_with_normals(new PCN);
+  // PCN::Ptr target_with_normals(new PCN);
+  // pcl_tools::addNormals(source_ex, 0.4, source_with_normals);
+  // pcl_tools::addNormals(target_ex, 0.4, target_with_normals);
+
+  // // ICP
+  // std::cout << "Registering with ICP..." << std::endl;
+  // bool success = false;
+  // Eigen::Matrix4f tf;
+  // double score = -1.0;
+  // success = pcl_tools::icp(source_ex, target_ex, tf, score);
+  // std::cout << "ICP fitness score: " << score << std::endl;
+
+  // if (success) {
+  //   PC::Ptr source_tf(new PC);
+  //   pcl::transformPointCloud(*source_ex, *source_tf, tf);
+  //   pcl_tools::saveCloud(source_tf, "icp", id1);
+  //   pcl_tools::saveCloud(target_ex, "icp", id2);
+  // }
+
+
+  // // ICP with normals
+  // success = false;
+  // score = -1.0;
+  // std::cout << "Registering with ICP with normals..." << std::endl;
+  // success = pcl_tools::icpn(source_with_normals, target_with_normals, tf, score);
+  // std::cout << "ICP fitness score: " << score << std::endl;
+
+  // if (success) {
+  //   PC::Ptr source_tf(new PC);
+  //   pcl::transformPointCloud(*source_ex, *source_tf, tf);
+  //   pcl_tools::saveCloud(source_tf, "icpn", id1);
+  //   pcl_tools::saveCloud(target_ex, "icpn", id2);
+  // }
+
+
+  // std::cout << "Done!" << std::endl;
 }
 
 int main(int argc, char **argv) {

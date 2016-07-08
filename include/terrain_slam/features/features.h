@@ -227,12 +227,14 @@ void Features<FeatureType>::findCorrespondences(typename pcl::PointCloud<Feature
   std::cout << "source->points.size() " << source->points.size() << std::endl;
   std::cout << "target->points.size() " << target->points.size() << std::endl;
 
-  boost::thread thread1(&Features::getCorrespondences, this, boost::ref(source), boost::ref(target), boost::ref(source2target));
-  boost::thread thread2(&Features::getCorrespondences, this, boost::ref(target), boost::ref(source), boost::ref(target2source));
+  // boost::thread thread1(&Features::getCorrespondences, this, boost::ref(source), boost::ref(target), boost::ref(source2target));
+  // boost::thread thread2(&Features::getCorrespondences, this, boost::ref(target), boost::ref(source), boost::ref(target2source));
+  getCorrespondences(source, target, source2target);
+  getCorrespondences(target, source, target2source);
 
   // Wait until both threads have finished
-  thread1.join();
-  thread2.join();
+  // thread1.join();
+  // thread2.join();
 
   // now populate the correspondences vector
   std::vector<std::pair<unsigned, unsigned> > c;

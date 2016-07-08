@@ -88,6 +88,12 @@ int main(int argc, char** argv) {
   int xM = 10;
   int iM = 50;
 
+  std::ofstream myfile("example.csv");
+  if (!myfile.is_open()) {
+    std::cout << "Can't open file " << std::endl;
+    return 0;
+  }
+
   #pragma omp parallel for collapse(5)
   for (size_t o = 0; o < xM; o++) {
     for (size_t xi = 0; xi < xM; xi++) {
@@ -118,32 +124,11 @@ int main(int argc, char** argv) {
             double dz = std::abs(new_tf.tz());
             double error = sqrt(dx*dx+dy*dy+dz*dz);
             // std::cout << "Error: " << error << std::endl;
-            output[i+iM*zi+iM*xM*yi+iM*xM*xM*xi+iM*xM*xM*xM*o][0] = overlap;
-            output[i+iM*zi+iM*xM*yi+iM*xM*xM*xi+iM*xM*xM*xM*o][1] = x;
-            output[i+iM*zi+iM*xM*yi+iM*xM*xM*xi+iM*xM*xM*xM*o][2] = y;
-            output[i+iM*zi+iM*xM*yi+iM*xM*xM*xi+iM*xM*xM*xM*o][3] = z;
-            output[i+iM*zi+iM*xM*yi+iM*xM*xM*xi+iM*xM*xM*xM*o][4] = i;
-            output[i+iM*zi+iM*xM*yi+iM*xM*xM*xi+iM*xM*xM*xM*o][5] = error;
+            myfile << overlap << "," << x << "," << y << "," << z << "," << i << "," << error << "\n";
           }
         }
       }
     }
-  }
-
-  std::ofstream myfile("example.csv");
-  if (!myfile.is_open()) {
-    std::cout << "Can't open file " << std::endl;
-    return 0;
-  }
-  //myfile << "ovelap,x,y,z,i,error\n";
-
-  for (size_t i = 0; i < output.size(); i++) {
-    myfile << output[i][0] << ","
-           << output[i][1] << ","
-           << output[i][2] << ","
-           << output[i][3] << ","
-           << output[i][4] << ","
-           << output[i][5] << "\n";
   }
   myfile.close();
   return 0;

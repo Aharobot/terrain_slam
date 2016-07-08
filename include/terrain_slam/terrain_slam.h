@@ -102,6 +102,7 @@ public:
   // boost::shared_ptr<BruteForceAdjuster> adj_;
   boost::shared_ptr<Adjuster> adj_;
   boost::shared_ptr<Graph> graph_;
+  std::vector<CloudPatchPtr> patches_;
 
   std::string clouds_dir_;
   double patch_size_;

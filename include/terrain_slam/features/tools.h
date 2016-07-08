@@ -100,5 +100,27 @@ class Tools {
       out.points.push_back(p);
     }
   }
+
+  /** \brief Get cloud salient indices
+   * @return
+   * \param input cloud
+   * \param output vector with salient indices
+   * \param zeta difference, respect to the z mean, to consider a point to be salient (in percentage)
+   */
+  static void getCloudSalientIndices(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, std::vector<uint>& salient_indices, double z_diff_th) {
+    std::vector<double> zs;
+    salient_indices.clear();
+    for (uint i=0; i<cloud->size(); i++)
+      zs.push_back(cloud->points[i].z);
+
+    double mean_z = accumulate(zs.begin(), zs.end(), 0.0) / zs.size();
+    for (uint i=0; i < zs.size(); i++)
+    {
+      // Compute zeta difference in percentage
+      double diff_percentage = 100.0 - std::min(mean_z, zs[i]) * 100.0 / std::max(mean_z, zs[i]);
+      if (diff_percentage > z_diff_th && fabs(mean_z - zs[i]) > 0.1)
+        salient_indices.push_back(i);
+    }
+  }
 };
 #endif  // TOOLS_H
