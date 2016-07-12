@@ -99,17 +99,17 @@ terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
 
   // Local Optimization
   solver_options.linear_solver_type = ceres::DENSE_QR;
-  solver_options.max_num_iterations = 1000;
+  solver_options.max_num_iterations = 100;
   solver_options.minimizer_progress_to_stdout = true;
   solver_options.num_threads = sysconf(_SC_NPROCESSORS_ONLN);
   solver_options.num_linear_solver_threads = sysconf(_SC_NPROCESSORS_ONLN);
 
   solver_options.initial_trust_region_radius = solver_options.max_trust_region_radius; // 4.0;
-  solver_options.max_solver_time_in_seconds = 600;
+  solver_options.max_solver_time_in_seconds = 60;
 
-  solver_options.parameter_tolerance = 1e-18;
-  solver_options.function_tolerance  = 1e-18;  // default 1e-6
-  solver_options.gradient_tolerance  = 1e-18;
+  solver_options.parameter_tolerance = 1e-6;
+  solver_options.function_tolerance  = 1e-6;  // default 1e-6
+  solver_options.gradient_tolerance  = 1e-6;
   solver_options.minimizer_progress_to_stdout = true;
 
   ceres::Solver::Summary sum;
