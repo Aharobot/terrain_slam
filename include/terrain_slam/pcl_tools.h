@@ -25,7 +25,6 @@
 
 // Generic pcl
 #include <pcl/common/common.h>
-#include <pcl/point_types.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/features/normal_3d_omp.h>
@@ -34,6 +33,7 @@
 #include <pcl/filters/conditional_removal.h>
 #include <pcl/filters/radius_outlier_removal.h>
 #include <pcl/kdtree/kdtree_flann.h>
+#include <pcl/point_types.h>
 #include <pcl/registration/icp.h>
 #include <pcl/registration/icp_nl.h>
 #include <pcl/registration/ndt.h>
@@ -43,10 +43,7 @@
 
 #include <boost/random/uniform_real_distribution.hpp>
 
-typedef pcl::PointXYZ PT;
-typedef pcl::PointNormal PTN;
-typedef pcl::PointCloud<PT> PC;
-typedef pcl::PointCloud<PTN> PCN;
+#include <string>
 
 namespace pcl_tools {
 
@@ -110,30 +107,6 @@ static Eigen::Matrix4Xd fromPCL(const pcl::PointCloud<pcl::Normal>::Ptr& cloud) 
   return points;
 }
 
-static void smooth(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_in,
-          pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_out) {
-  // Create a KD-Tree
-  pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
-  // Output has the PointNormal type in order to store the normals calculated by MLS
-  pcl::PointCloud<pcl::PointNormal> mls_points;
-
-  // Init object (second point type is for the normals, even if unused)
-  pcl::MovingLeastSquares<pcl::PointXYZ, pcl::PointNormal> mls;
-
-  mls.setComputeNormals(true);
-
-  // Set parameters
-  mls.setInputCloud(cloud_in);
-  mls.setPolynomialFit(true);
-  mls.setSearchMethod(tree);
-  mls.setSearchRadius(0.4);
-
-  // Reconstruct
-  mls.process(mls_points);
-  pcl::copyPointCloud(mls_points, *cloud_out);
-}
-
 static void removeOutliers(
     const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_in,
           double min_z, double max_z, double radius, int neighbors,
@@ -151,10 +124,12 @@ static void removeOutliers(
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>());
   condrem.filter(*cloud_filtered);
 
+  std::cout << "Conditional remover: Before: " << cloud_in->size() << " after: " << cloud_filtered->size() << std::endl;
+
   // Remove points that have less than N neighbours in a radius
   pcl::RadiusOutlierRemoval<pcl::PointXYZ> outrem;
   // build the filter
-  outrem.setInputCloud(cloud_filtered);
+  outrem.setInputCloud(cloud_in);
   outrem.setRadiusSearch(radius);
   outrem.setMinNeighborsInRadius(neighbors);
   // apply filter
@@ -243,8 +218,8 @@ static void randomlySample(
   int orig_num_points = cloud_in->points.size();
   double orig_resolution = orig_num_points / (range_x*range_y);
   double curr_resolution = num_points / (range_x*range_y);
-  int max_neigbours = orig_resolution / curr_resolution * 2;
-  std::cout << "max_neigbours " << max_neigbours << std::endl;
+  int max_neigbours = orig_resolution / curr_resolution * 5;
+  // std::cout << "max_neigbours " << max_neigbours << std::endl;
 
   int n = 0;
   int it = 0;
@@ -273,9 +248,11 @@ static void randomlySample(
       pcl::PointXY p3 = cloud_in_xy->points[point_idx[2]];
       bool inside = pointInTriangle(sp, p1, p2, p3);
 
-      int neighbours = numNeighboursAtLocation(sp, cloud_out, radius_search);
+      // VERY SLOW!!
+      // int neighbours = numNeighboursAtLocation(sp, cloud_out, radius_search);
+      int neighbours = 1;
 
-      if (it % 1000 == 0) std::cout << "it " << it << " n " << n << std::endl;
+      // if (it % 1000 == 0) std::cout << "it " << it << " n " << n << std::endl;
 
       if (valid_point && inside && neighbours < max_neigbours) {
         // add point to output cloud
@@ -326,7 +303,7 @@ static bool normalDistributionsTransform(
   // Setting point cloud to be aligned to.
   ndt.setInputTarget(target);
   // Calculating required rigid transform to align the input cloud to the target cloud.
-  pcl::PointCloud<pcl::PointXYZ>::Ptr aligned(new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr aligned(new pcl::PointCloud<pcl::PointXYZ>());
   ndt.align(*aligned, transform);
   score = ndt.getFitnessScore();
   transform = ndt.getFinalTransformation();
@@ -338,13 +315,13 @@ static bool icp(
     const pcl::PointCloud<pcl::PointXYZ>::Ptr& target,
           Eigen::Matrix4f& transform,
           double& score) {
-  pcl::PointCloud<pcl::PointXYZ>::Ptr aligned(new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr aligned(new pcl::PointCloud<pcl::PointXYZ>());
   pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
-  icp.setMaxCorrespondenceDistance(0.4);
-  icp.setRANSACOutlierRejectionThreshold(0.6);
-  icp.setTransformationEpsilon(0.01);
-  icp.setEuclideanFitnessEpsilon(0.01);
-  icp.setMaximumIterations(200);
+  icp.setMaxCorrespondenceDistance(0.2);
+  icp.setRANSACOutlierRejectionThreshold(0.4);
+  icp.setTransformationEpsilon(0.001);
+  icp.setEuclideanFitnessEpsilon(0.001);
+  icp.setMaximumIterations(100);
   icp.setInputSource(source);
   icp.setInputTarget(target);
   icp.align(*aligned);
@@ -358,8 +335,8 @@ static bool icpn(
     const pcl::PointCloud<pcl::PointNormal>::Ptr& target,
           Eigen::Matrix4f& transform,
           double& score) {
-  pcl::PointCloud<pcl::PointNormal>::Ptr aligned_wn(new pcl::PointCloud<pcl::PointNormal>);
-  pcl::IterativeClosestPointWithNormals<PTN, PTN> icpn;
+  pcl::PointCloud<pcl::PointNormal>::Ptr aligned_wn(new pcl::PointCloud<pcl::PointNormal>());
+  pcl::IterativeClosestPointWithNormals<pcl::PointNormal, pcl::PointNormal> icpn;
   icpn.setMaxCorrespondenceDistance(0.4);
   icpn.setRANSACOutlierRejectionThreshold(0.6);
   icpn.setTransformationEpsilon(0.001);
@@ -397,8 +374,18 @@ static void saveCloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
                       const std::string& prefix,
                       int id) {
   std::string clouds_dir("../adjusted/");
-  std::string filename = prefix + "_" + std::to_string(id) + ".pcd";
-  pcl::io::savePCDFileASCII(clouds_dir + filename, *cloud);
+  std::ostringstream os ;
+  os << clouds_dir << prefix << "_" << id << ".pcd" ;
+  pcl::io::savePCDFileASCII(os.str(), *cloud);
+}
+
+static void saveCloud(const pcl::PointCloud<pcl::PointNormal>::Ptr& cloud,
+                      const std::string& prefix,
+                      int id) {
+  std::string clouds_dir("../adjusted/");
+  std::ostringstream os ;
+  os << clouds_dir << prefix << "_" << id << ".pcd" ;
+  pcl::io::savePCDFileASCII(os.str(), *cloud);
 }
 
 static void loadCloud(const std::string& folder,
@@ -407,38 +394,63 @@ static void loadCloud(const std::string& folder,
   pcl::io::loadPCDFile (folder + "/" + filename, *cloud);
 }
 
-static void preprocessCloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr& input, int id, pcl::PointCloud<pcl::PointXYZ>::Ptr& output) {
-  // Smooth clouds
-  std::cout << "Smoothing cloud " << id << std::endl;
-  pcl::PointCloud<pcl::PointXYZ>::Ptr input_smoothed(new pcl::PointCloud<pcl::PointXYZ>);
-  pcl_tools::smooth(input, input_smoothed);
-  pcl_tools::saveCloud(input_smoothed, "smooth", id);
+static void smooth(
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_in,
+          pcl::PointCloud<pcl::PointNormal>::Ptr& cloud_out) {
+  // Create a KD-Tree
+  pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
 
-  // Remove outliers
-  std::cout << "Removing outliers " << id << std::endl;
-  pcl::PointCloud<pcl::PointXYZ>::Ptr input_filt(new pcl::PointCloud<pcl::PointXYZ>);
-  double min_z = 0.5;   // m
-  double max_z = 10.0;  // m
-  double neighbors_radius = 0.4;  // m
-  int min_neighbors = 40;
-  pcl_tools::removeOutliers(input_smoothed, min_z, max_z, neighbors_radius, min_neighbors, input_filt);
-  pcl_tools::saveCloud(input_filt, "outl", id);
+  // Init object (second point type is for the normals, even if unused)
+  pcl::MovingLeastSquares<pcl::PointXYZ, pcl::PointNormal> mls;
+  std::cout << "Process IN " << std::endl;
 
-  // Sampling the cloud
-  std::cout << "Sampling the cloud " << id << std::endl;
-  pcl::PointCloud<pcl::PointXYZ>::Ptr input_grid(new pcl::PointCloud<pcl::PointXYZ>);
-  int num_points = 2000;
-  double radius_search = 0.25;
-  pcl_tools::randomlySample(input_filt, num_points, radius_search, input_grid);
-  pcl_tools::saveCloud(input_grid, "grid", id);
+  // Set parameters
+  mls.setComputeNormals(true);
+  mls.setInputCloud(cloud_in);
+  mls.setPolynomialFit(true);
+  mls.setSearchMethod(tree);
+  mls.setSearchRadius(0.2);
 
-  // Exaggerate Z component
-  std::cout << "Exaggerating Z component " << id << std::endl;
-  pcl::PointCloud<pcl::PointXYZ>::Ptr input_ex(new pcl::PointCloud<pcl::PointXYZ>);
-  double multiplier = 4.0;
-  pcl_tools::exaggerateZ(input_grid, multiplier, output);
-  pcl_tools::saveCloud(output, "exag", id);
+  // Reconstruct
+  mls.process(*cloud_out);
+  std::cout << "Process OUT " << std::endl;
 }
+
+// static void preprocessCloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr& input, int id, pcl::PointCloud<pcl::PointXYZ>::Ptr& output) {
+//   // Smooth clouds
+//   std::cout << "Smoothing cloud " << id << std::endl;
+//   pcl::PointCloud<pcl::PointNormal>::Ptr input_smoothed(new pcl::PointCloud<pcl::PointNormal>());
+//   pcl::PointCloud<pcl::PointXYZ>::Ptr input_smoothed2(new pcl::PointCloud<pcl::PointXYZ>());
+//   pcl_tools::smooth(input, input_smoothed);
+//   pcl_tools::saveCloud(input_smoothed, "smooth", id);
+
+//   pcl::copyPointCloud(*input_smoothed, *input_smoothed2);
+
+//   // Remove outliers
+//   std::cout << "Removing outliers " << id << std::endl;
+//   pcl::PointCloud<pcl::PointXYZ>::Ptr input_filt(new pcl::PointCloud<pcl::PointXYZ>());
+//   double min_z = 0.5;   // m
+//   double max_z = 10.0;  // m
+//   double neighbors_radius = 0.4;  // m
+//   int min_neighbors = 40;
+//   pcl_tools::removeOutliers(input_smoothed2, min_z, max_z, neighbors_radius, min_neighbors, input_filt);
+//   pcl_tools::saveCloud(input_filt, "outl", id);
+
+//   // Sampling the cloud
+//   std::cout << "Sampling the cloud " << id << std::endl;
+//   pcl::PointCloud<pcl::PointXYZ>::Ptr input_grid(new pcl::PointCloud<pcl::PointXYZ>());
+//   int num_points = 2000;
+//   double radius_search = 0.25;
+//   pcl_tools::randomlySample(input_filt, num_points, radius_search, input_grid);
+//   pcl_tools::saveCloud(input_grid, "grid", id);
+
+//   // Exaggerate Z component
+//   std::cout << "Exaggerating Z component " << id << std::endl;
+//   pcl::PointCloud<pcl::PointXYZ>::Ptr input_ex(new pcl::PointCloud<pcl::PointXYZ>());
+//   double multiplier = 4.0;
+//   pcl_tools::exaggerateZ(input_grid, multiplier, output);
+//   pcl_tools::saveCloud(output, "exag", id);
+// }
 
 }  // namespace
 

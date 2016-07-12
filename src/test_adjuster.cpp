@@ -39,15 +39,13 @@ void fillData(int num_points, double overlap, boost::shared_ptr<terrain_slam::Cl
   int inliers = num_points*overlap;
   // std::cout << "Generating " << inliers << " inliers out of " << num_points << std::endl;
   int outliers = num_points - inliers;
-  c1->points.resize(4, num_points);
-  c2->points.resize(4, num_points);
   for (size_t i = 0; i < num_points; ++i) {
     Eigen::Vector4d v;
     v(0) = dis(gen)*6.0;
     v(1) = dis(gen)*6.0;
     v(2) = dis(gen)*2.0;
     v(3) = 1.0;
-    c1->points.col(i) = v;
+    c1->add(v);
     // std::cout << "Creating point at (" << v(0) << ", " << v(1) << ", " << v(2) << ")" << std::endl;
   }
 
@@ -55,7 +53,7 @@ void fillData(int num_points, double overlap, boost::shared_ptr<terrain_slam::Cl
     Eigen::Vector4d v;
 
     if (i < inliers) {
-      v = c1->points.col(i);
+      v = c1->at(i);
       v(0) -= 0.7;
       // add noise
       v(0) += dis(gen)*0.2 / (RAND_MAX + 1.0);
@@ -67,7 +65,7 @@ void fillData(int num_points, double overlap, boost::shared_ptr<terrain_slam::Cl
       v(2) = dis(gen)*2.0;
       v(3) = 1.0;
     }
-    c2->points.col(i) = v;
+    c2->add(v);
     // std::cout << "Creating point at (" << v(0) << ", " << v(1) << ", " << v(2) << ")" << std::endl;
   }
 }
@@ -109,19 +107,17 @@ int main(int argc, char** argv) {
             fillData(100, overlap, c1, c2);
             // c1->save(0, std::string("../adjusted/original"), std::string(""));
             // c2->save(1, std::string("../adjusted/original"), std::string(""));
-            c1->copy2Grid();
-            c2->copy2Grid();
-            c2->T(0,3) = x;
-            c2->T(1,3) = y;
-            c2->T(2,3) = z;
+            c2->transform(0,3) = x;
+            c2->transform(1,3) = y;
+            c2->transform(2,3) = z;
             c1->setId(100*i+0);
             c2->setId(100*i+1);
             terrain_slam::Adjuster adj;
             // std::cout << "Adjusting... " << std::endl;
-            terrain_slam::Transform new_tf = adj.adjust(c1, c2);
-            double dx = std::abs(new_tf.tx()) - 0.7;
-            double dy = std::abs(new_tf.ty());
-            double dz = std::abs(new_tf.tz());
+            Eigen::Matrix4d new_tf = adj.adjust(c1, c2);
+            double dx = std::abs(new_tf(0, 3)) - 0.7;
+            double dy = std::abs(new_tf(1, 3));
+            double dz = std::abs(new_tf(2, 3));
             double error = sqrt(dx*dx+dy*dy+dz*dz);
             // std::cout << "Error: " << error << std::endl;
             myfile << overlap << "," << x << "," << y << "," << z << "," << i << "," << error << "\n";

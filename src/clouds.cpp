@@ -1,202 +1,53 @@
-// The MIT License (MIT)
 
-// Copyright (c) 2016 Miquel Massot Campos
-
-//  Permission is hereby granted, free of charge, to any person obtaining a
-//  copy of this software and associated documentation files (the "Software"),
-//  to deal in the Software without restriction, including without limitation
-//  the rights to use, copy, modify, merge, publish, distribute, sublicense,
-//  and/or sell copies of the Software, and to permit persons to whom the
-//  Software is furnished to do so, subject to the following conditions:
-//
-//  The above copyright notice and this permission notice shall be included in
-//  all copies or substantial portions of the Software.
-//
-//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-//  OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-//  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-//  DEALINGS IN THE SOFTWARE.
-
-#include <terrain_slam/ply_saver.h>
-#include <terrain_slam/ply_loader.h>
 #include <terrain_slam/clouds.h>
 
-#include <boost/filesystem.hpp>
+#include <pcl/common/transforms.h>
 
-#include <fstream>
-#include <iostream>
-#include <iomanip>
-
-
-terrain_slam::CloudPatch::CloudPatch(const std::vector<LaserLine>& lines, int start_idx, int end_idx)
-    : Transform(lines[start_idx].tf()), gridded_(false), start_idx_(start_idx), end_idx_(end_idx), id_(-1) {
-  for (size_t i = start_idx; i <= end_idx; i++)
-    add(lines[i]);
+void terrain_slam::CloudPatch::add(const CloudPatch& other_patch) {
+  Eigen::Matrix4d tf_other = other_patch.transform();
+  Eigen::Matrix4d tf = transform().inverse()*tf_other;
+  Cloud transformed;
+  pcl::transformPointCloud(*other_patch.cloud, transformed, tf.cast<float>());
+  add(transformed);
 }
 
-void terrain_slam::CloudPatch::add(const LaserLine& line) {
-  // First line is the TF of the CloudPatch
-  if (lines_.size() == 0) {
-    T = line.tf();
-  }
-  // save the LaserLine
-  lines_.push_back(line);
-
-  // transform the points to the local tf and add them
-  Eigen::Matrix4Xd new_points = transform(line);
-  // std::cout << "concatenate to points " << std::endl;
-  Eigen::Matrix4Xd cat_points(points.rows(), points.cols()+new_points.cols());
-  cat_points << points, new_points;
-  points = cat_points;
+void terrain_slam::CloudPatch::add(const Cloud& other_cloud) {
+  *cloud += other_cloud;
 }
 
-void terrain_slam::CloudPatch::grid(double resolution, double search_radius) {
-  if (!gridded_) {
-    // Try to open if the file exists
-    std::ostringstream ss;
-    ss << std::setw(4) << std::setfill('0') << getId();
-    std::string path("../grids/");
-    std::string cloud_filename = path + "cloud" + ss.str() + ".ply";
-    grid_resolution_ = resolution;
-    if (boost::filesystem::exists(cloud_filename)) {
-      grid_ = load(cloud_filename);
-      //save(getId(), std::string("../grids2"), std::string(""), true, true);
-    } else {
-      // If it doesn't, create it and save it.
-      terrain_slam::Gridder g(grid_resolution_, search_radius);
-      g.setInput(points);
-      grid_ = g.grid();
-      save(getId(), std::string("../grids"), std::string(""), true, true);
-    }
-    nns_.reset(Nabo::NNSearchD::createKDTreeLinearHeap(grid_));
-    gridded_ = true;
-  }
+void terrain_slam::CloudPatch::add(const Point& other_point) {
+  cloud->push_back(other_point);
 }
 
-bool terrain_slam::CloudPatch::getMinMax(double &min_x, double &min_y,
-                                         double &max_x, double &max_y) {
-  min_x = points(0, 0);
-  min_y = points(0, 1);
-  max_x = points(0, 0);
-  max_y = points(0, 1);
-
-  for (size_t i = 0; i < points.cols(); i++) {
-    Eigen::Vector4d v = points.col(i);
-    double vx = v(0);
-    double vy = v(1);
-    if (vx > max_x) {
-      max_x = vx;
-    } else if (vx < min_x) {
-      min_x = vx;
-    }
-
-    if (vy > max_y) {
-      max_y = vy;
-    } else if (vy < min_y) {
-      min_y = vy;
-    }
-  }
-  if ((min_x != max_x) && (min_y != max_y)) {
-    return true;
-  } else {
-    return false;
-  }
+void terrain_slam::CloudPatch::add(const Eigen::Vector3d& other_point) {
+  Point p(other_point(0), other_point(1), other_point(2));
+  cloud->push_back(p);
 }
 
-void terrain_slam::CloudPatch::createkNN() {
-  Eigen::MatrixXd p(points);
-  nns_c_.reset(Nabo::NNSearchD::createKDTreeLinearHeap(p));
-}
-
-std::vector<Eigen::Vector4d> terrain_slam::CloudPatch::kNN(const Eigen::Vector4d& q, int k, bool grid) const {
-  Eigen::VectorXi indices(k);
-  Eigen::VectorXd dists2(k);
-
-  if (grid) nns_->knn(q, indices, dists2, k);
-  else nns_c_->knn(q, indices, dists2, k);
-  std::vector<Eigen::Vector4d> nn;
-
-  for (size_t i = 0; i < k; i++) {
-    if (grid) nn.push_back(grid_.col(indices(i)));
-    else nn.push_back(points.col(indices(i)));
-  }
-  return nn;
-}
-
-Eigen::Matrix4Xd terrain_slam::CloudPatch::getPoints(
-    bool local_coordinate_frame,
-    bool grid) const {
-  if (!grid) {
-    Eigen::Matrix4Xd m(points.rows(), points.cols());
-    for (int i = 0; i < points.cols(); i++) {
-      if (local_coordinate_frame) {
-        m.col(i) = points.col(i);
-      } else {
-        m.col(i) = tf()*points.col(i);
-      }
-    }
-    return m;
-  } else {
-    Eigen::Matrix4Xd m(grid_.rows(), grid_.cols());
-    for (int i = 0; i < grid_.cols(); i++) {
-      if (local_coordinate_frame) {
-        m.col(i) = grid_.col(i);
-      } else {
-        m.col(i) = tf()*grid_.col(i);
-      }
-    }
-    return m;
-  }
+void terrain_slam::CloudPatch::add(const Eigen::Vector4d& other_point) {
+  Point p(other_point(0), other_point(1), other_point(2));
+  cloud->push_back(p);
 }
 
 Eigen::Vector3d terrain_slam::CloudPatch::getCentroid() const {
-  Eigen::Vector4d c(0, 0, 0, 1);
-  c = points.rowwise().sum();
-  c = c / (double)points.cols();
-  c = tf()*c;
-  Eigen::Vector3d v = c.hnormalized();
-  return v;
-}
-
-Eigen::Matrix4Xd terrain_slam::CloudPatch::load(const std::string& filename) {
-  PlyLoader loader;
-  return loader.load(filename);
-}
-
-void terrain_slam::CloudPatch::save(int idx,
-          const std::string& path,
-          const std::string& suffix,
-          bool local_coordinate_frame,
-          bool grid) {
-  boost::filesystem::path dir(path);
-  boost::filesystem::create_directory(dir);
-  std::ostringstream ss;
-  ss << std::setw(4) << std::setfill('0') << idx;
-  std::string cloud_filename = path + "/cloud" + ss.str() + suffix + ".ply";
-  std::cout << "[INFO]: Saving ply file " << cloud_filename << std::endl;
-  PlySaver saver;
-  saver.saveCloud(cloud_filename, getPoints(local_coordinate_frame, grid));
-}
-
-
-Eigen::Matrix4Xd terrain_slam::CloudPatch::transform(const LaserLine& line) {
-  Eigen::Matrix4Xd m(line.points.rows(), line.points.cols());
-  for (int i = 0; i < line.points.cols(); i++) {
-    if (lines_.size() == 1) {
-      // set first line at origin
-      m.col(i) = line.points.col(i);
-    } else {
-      // and the rest
-      m.col(i) = tf().inverse()*line.tf()*line.points.col(i);
-    }
+  Eigen::Vector3d pe;
+  for (size_t i = 0; i < cloud->size(); i++) {
+    Point pt = cloud->points[i];
+    pe += Eigen::Vector3d(pt.x, pt.y, pt.z);
   }
-  return m;
+  return pe/cloud->size();
 }
 
-void terrain_slam::CloudPatch::overlap(const CloudPatch& other,
-                                       CloudPatch& overlap) {
-
+std::vector<Eigen::Vector4d>
+terrain_slam::CloudPatch::kNN(const Eigen::Vector4d& p, int n) const {
+  std::vector<Eigen::Vector4d> points;
+  std::vector<int> point_idx(n);
+  std::vector<float> point_sq_distance(n);
+  Point sp(p(0), p(1), p(2));
+  kdtree.nearestKSearch(sp, n, point_idx, point_sq_distance);
+  for (size_t i = 0; i < point_idx.size(); i++) {
+    Point pt = cloud->points[point_idx[i]];
+    points.push_back(Eigen::Vector4d(pt.x, pt.y, pt.z, 1.0));
+  }
+  return points;
 }

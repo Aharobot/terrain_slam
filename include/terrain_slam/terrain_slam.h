@@ -30,6 +30,7 @@
 #include <vector>
 
 #define DEFAULT_WEIGHT 100
+#define LC_WEIGHT 80
 
 namespace terrain_slam {
 class TerrainSlam {
@@ -60,7 +61,7 @@ public:
    */
   void readFiles(const std::vector<std::string> &cloud_names,
                  const std::vector<std::string> &cloud_paths,
-                 std::vector<LaserLine> &lines);
+                 std::vector<CloudPatchPtr> &lines);
 
   /**
    * @brief      Use boost filesystem to explore the desired path for yml files
@@ -83,7 +84,7 @@ public:
    * @param[in]   Lines       Input laser lines
    * @param       patches     Output vector of CloudPatches
    */
-  void createPatches(const std::vector<LaserLine>& lines,
+  void createPatches(const std::vector<CloudPatchPtr>& lines,
                      std::vector<CloudPatchPtr>& patches);
 
   /**
@@ -97,7 +98,10 @@ public:
 
   // int preprocessPoints(std::vector<cv::Point3d>& points, int idx);
 
-  Transform findTransform(const std::vector<CloudPatchPtr> &c, int id1, int id2);
+  bool findTransform(const std::vector<CloudPatchPtr> &c, int id1, int id2,
+                                              Eigen::Matrix4d& transform);
+
+  bool processCloud(const CloudPatchPtr& c, pcl::PointCloud<pcl::PointXYZ>::Ptr& output);
 
   // boost::shared_ptr<BruteForceAdjuster> adj_;
   boost::shared_ptr<Adjuster> adj_;
@@ -110,6 +114,7 @@ public:
   int std_mult_;
   bool debug_;
   bool filter_;
+  int min_pts_;
 
 }; // Class
 } // Namespace

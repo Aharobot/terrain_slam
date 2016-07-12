@@ -85,14 +85,14 @@ FILE(GLOB_RECURSE MY_HEADERS include/*.h)
 # include for local directory
 include_directories(BEFORE include)
 
-add_library(outlier_remover src/outlier_remover.cpp)
-target_link_libraries(outlier_remover ${libnabo_LIBRARIES})
+# add_library(outlier_remover src/outlier_remover.cpp)
+# target_link_libraries(outlier_remover ${libnabo_LIBRARIES})
 
 add_library(adjuster src/adjuster.cpp)
 target_link_libraries(adjuster ${CERES_LIBRARIES})
 
-add_library(gridder src/gridder.cpp)
-target_link_libraries(gridder ${CERES_LIBRARIES})
+# add_library(gridder src/gridder.cpp)
+# target_link_libraries(gridder ${CERES_LIBRARIES})
 
 add_library(graph src/graph.cpp)
 target_link_libraries(graph ${g2o_LIBRARIES})
@@ -101,6 +101,12 @@ add_executable(terrain_slam src/terrain_slam.cpp
                             src/clouds.cpp
                             src/transform.cpp
                             ${MY_HEADERS})
+# add_executable(resampling src/resampling.cpp
+#                             ${MY_HEADERS})
+# target_link_libraries(resampling ${PCL_LIBRARIES})
+
+add_executable(greedy_projection src/greedy_projection.cpp)
+target_link_libraries(greedy_projection ${PCL_LIBRARIES})
 
 # add_to_cached_list(CGAL_EXECUTABLE_TARGETS terrain_slam)
 
@@ -113,27 +119,27 @@ target_link_libraries(terrain_slam  Boost::program_options
                                     ${g2o_LIBRARIES}
                                     ${PCL_LIBRARIES}
                                     cholmod
-                                    outlier_remover
+                                    # outlier_remover
                                     adjuster
-                                    graph
-                                    gridder)
+                                    # gridder
+                                    graph)
 set_property(TARGET adjuster PROPERTY CXX_STANDARD 11)
 set_property(TARGET adjuster PROPERTY CXX_STANDARD_REQUIRED ON)
 set_property(TARGET graph PROPERTY CXX_STANDARD 11)
 set_property(TARGET graph PROPERTY CXX_STANDARD_REQUIRED ON)
-set_property(TARGET gridder PROPERTY CXX_STANDARD 11)
-set_property(TARGET gridder PROPERTY CXX_STANDARD_REQUIRED ON)
+# set_property(TARGET gridder PROPERTY CXX_STANDARD 11)
+# set_property(TARGET gridder PROPERTY CXX_STANDARD_REQUIRED ON)
 set_property(TARGET terrain_slam PROPERTY CXX_STANDARD 11)
 set_property(TARGET terrain_slam PROPERTY CXX_STANDARD_REQUIRED ON)
 
 add_executable(test_adjuster src/test_adjuster.cpp
                              src/clouds.cpp
-                             src/transform.cpp
                              ${MY_HEADERS})
 target_link_libraries(test_adjuster adjuster
                                     graph
-                                    gridder
-                                    outlier_remover
+                                    # gridder
+                                    # outlier_remover
+                                    ${PCL_LIBRARIES}
                                     Boost::system
                                     Boost::filesystem)
 set_property(TARGET test_adjuster PROPERTY CXX_STANDARD 11)

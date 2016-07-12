@@ -23,211 +23,130 @@
 #ifndef CLOUDS_H
 #define CLOUDS_H
 
-#include <terrain_slam/gridder.h>
-#include <terrain_slam/transform.h>
-
 #include <boost/shared_ptr.hpp>
-#include <opencv2/opencv.hpp>
-#include <nabo/nabo.h>
 
-
+// Generic pcl
+#include <pcl/common/common.h>
+#include <pcl/point_types.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl/kdtree/kdtree_flann.h>
 
 namespace terrain_slam {
 
-inline Eigen::Vector3d cv2eigen(const cv::Point3d &p) {
-  return Eigen::Vector3d(p.x, p.y, p.z);
-}
-
-class LaserLine: public Transform {
-public:
+class Transform {
+ public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  LaserLine(int num_points, const Transform& T)
-      : Transform(T), id(-1) {
-    points = Eigen::Matrix4Xd(4, num_points);
-  }
-  LaserLine(int num_points,
-            const Eigen::Vector3d &xyz,
-            const Eigen::Vector3d &rpy)
-      : Transform(xyz, rpy) {
-    points = Eigen::Matrix4Xd(4, num_points);
-  }
-  void add(const Eigen::Vector3d& p, int i) {
-    points(0, i) = p(0);
-    points(1, i) = p(1);
-    points(2, i) = p(2);
-    points(3, i) = 1.0;
+  Eigen::Matrix4d T;
+
+  Transform(){
+    T = Eigen::Matrix4d::Identity();
   }
 
-  Eigen::Vector3d getCentroid() const {
-    Eigen::Vector4d c(0, 0, 0, 1);
-    c = points.rowwise().sum();
-    c = c / (double)points.cols();
-    c = tf()*c;
-    Eigen::Vector3d v = c.hnormalized();
-    return v;
+  Transform(const Eigen::Matrix4d& m){
+    T = m;
   }
 
-  size_t size() const { return points.cols(); }
+  Transform& operator=(const Eigen::Matrix4d& m) {
+    T = m;
+    // by convention, always return *this
+    return *this;
+  }
 
-  void setId(int i) { id = i; }
-  int getId() const { return id; }
-  void setFilename(const std::string& f) { filename = f; }
-  std::string getFilename() const { return filename; }
+  Transform& operator()(const Eigen::Matrix4d& m) {
+    T = m;
+    // by convention, always return *this
+    return *this;
+  }
 
-  // Points are stored column-wise
-  Eigen::Matrix4Xd points;
-  int id;
-  std::string filename;
+  Eigen::Matrix4d operator()() const {
+    return T;
+  }
+
+  double& operator()(int row, int col) {
+    assert(col >= 0 && col < 4);
+    assert(row >= 0 && row < 4);
+    return T(row, col);
+  }
+
+  const double& operator()(int row, int col) const {
+    assert(col >= 0 && col < 4);
+    assert(row >= 0 && row < 4);
+    return T(row, col);
+  }
+
+  double roll() const {
+    Eigen::Vector3d rpy = rotation().eulerAngles(0, 1, 2);
+    return rpy(0);
+  }
+
+  double pitch() const {
+    Eigen::Vector3d rpy = rotation().eulerAngles(0, 1, 2);
+    return rpy(1);
+  }
+
+  double yaw() const {
+    Eigen::Vector3d rpy = rotation().eulerAngles(0, 1, 2);
+    return rpy(2);
+  }
+
+  double x() const { return T(0, 3); }
+  double y() const { return T(1, 3); }
+  double z() const { return T(2, 3); }
+  Eigen::Matrix3d rotation() const { return T.block<3,3>(0,0); }
+  Eigen::Vector3d origin() const { return T.block<3,1>(0,3); }
 };
 
-class CloudPatch: public Transform {
-public:
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  Eigen::Matrix4Xd points;
+class Vertex {
+ public:
+  Vertex() : id(-1) {}
+  Vertex(int n) : id(n) {}
+  Vertex(int n, const std::string& s) : id(n), name(s) {}
+  inline void setId(int n) { id = n; }
+  inline int getId() const { return id;}
+  inline void setName(const std::string& s) {name = s;}
+  inline std::string getName() const {return name;}
 
-  CloudPatch() {};
+ protected:
+  int id;
+  std::string name;
+};
 
-  CloudPatch(const std::vector<LaserLine>& lines, int start_idx, int end_idx);
+class CloudPatch: public Vertex {
+ public:
+  // Definitions
+  typedef pcl::PointXYZ                 Point;
+  typedef pcl::Normal                   Normal;
+  typedef pcl::PointNormal              PointNormal;
+  typedef pcl::PointCloud<Point>        Cloud;
+  typedef pcl::PointCloud<Normal>       CloudNormal;
+  typedef pcl::PointCloud<PointNormal>  CloudPointNormal;
 
-  void add(const LaserLine& line);
+  Cloud::Ptr cloud;
+  pcl::KdTreeFLANN<Point> kdtree;
+  Transform transform;
 
-  void grid(double resolution = 0.1, double search_radius = 0.1);
+  CloudPatch() : cloud(new Cloud) {}
 
-  std::vector<Eigen::Vector4d> kNN(const Eigen::Vector4d& q, int k, bool grid = true) const ;
+  void add(const CloudPatch& other_patch);
+  void add(const Cloud& other_cloud);
+  void add(const Point& other_point);
+  void add(const Eigen::Vector3d& other_point);
+  void add(const Eigen::Vector4d& other_point);
+  Eigen::Vector3d getCentroid() const;
 
-  /**
-   * @brief      Loads a PLY into an eigen matrix
-   *
-   * @param[in]  filename  The filename
-   *
-   * @return     The point cloud
-   */
-  Eigen::Matrix4Xd load(const std::string& filename);
+  std::vector<Eigen::Vector4d> kNN(const Eigen::Vector4d& p, int n) const;
 
-  /**
-   * @brief Save the patch to a file
-   *
-   * @param       idx         All saved files follow the same name, you provide the numbering
-   */
-  void save(int idx,
-            const std::string& path = std::string("../output"),
-            const std::string& suffix = std::string(""),
-            bool local_coordinate_frame = false,
-            bool grid = false) ;
+  inline size_t size() const { return cloud->points.size(); }
 
-  /**
-   * @brief      Gets the start index.
-   *
-   * @return     The start index.
-   */
-  int getStartIdx() { return start_idx_; }
-
-  /**
-   * @brief      Gets the end index.
-   *
-   * @return     The end index.
-   */
-  int getEndIdx() { return end_idx_; }
-
-  /**
-   * @brief      Sets the identifier.
-   *
-   * @param[in]  id    The identifier
-   */
-  void setId(int id) { id_ = id; }
-
-  /**
-   * @brief      Gets the identifier.
-   *
-   * @return     The identifier.
-   */
-  int getId(void) { return id_; }
-
-  /**
-   * @brief      Returns the point at location i
-   *
-   * @param[in]  i     index
-   *
-   * @return     Point
-   */
-  Eigen::Vector4d point(int i) const { return points.col(i); }
-
-  /**
-   * @brief      Returns the number of points
-   *
-   * @return     Number of points
-   */
-  size_t size() const { return points.cols(); }
-
-  /**
-   * @brief      Gets the grid.
-   *
-   * @return     The grid.
-   */
-  Eigen::Matrix4Xd getGrid() const { return grid_; }
-  Eigen::Vector4d getGridPoint(int i) const { return grid_.col(i); }
-  size_t gridSize() const { return grid_.cols(); }
-  double gridResolution() const {
-    if (gridded_) return grid_resolution_;
-    else return 0.0;
+  inline Eigen::Vector4d at(int i) const {
+    return Eigen::Vector4d(cloud->points[i].x,
+                           cloud->points[i].y,
+                           cloud->points[i].z,
+                           1);
   }
 
-  /**
-   * @brief      Gets the points.
-   *
-   * @param[in]  local_coordinate_frame  Whether points should be transformed to
-   * the local coordinate frame
-   *
-   * @return     The points.
-   */
-  Eigen::Matrix4Xd getPoints(bool local_coordinate_frame = false,
-                             bool grid = false) const ;
+  inline void updateSearchTree() { kdtree.setInputCloud(cloud); }
 
-  /**
-   * @brief      Gets the centroid.
-   *
-   * @return     The centroid.
-   */
-  Eigen::Vector3d getCentroid() const ;
-
-  /**
-   * @brief      Computes the overlap between two clouds
-   *
-   * @param[in]  other    The other cloud
-   * @param      overlap  The overlapped cloud
-   */
-  void overlap(const CloudPatch& other, CloudPatch& overlap);
-
-  bool getMinMax(double &min_x, double &min_y, double &max_x, double &max_y);
-
-  void createkNN(void);
-
-  void copy2Grid(void) {
-    grid_ = points;
-    nns_.reset(Nabo::NNSearchD::createKDTreeLinearHeap(grid_));
-    gridded_ = true;
-  }
-
-protected:
-  bool gridded_;
-  double grid_resolution_;
-  int start_idx_;
-  int end_idx_;
-  int id_;
-  std::vector<LaserLine> lines_;
-  Eigen::MatrixXd grid_;
-  boost::shared_ptr<Nabo::NNSearchD> nns_;
-  boost::shared_ptr<Nabo::NNSearchD> nns_c_;
-
-  /**
-   * @brief      Transform the laser line to the local coordinate frame of the
-   * cloud
-   *
-   * @param[in]  line  The line
-   *
-   * @return     The points
-   */
-  Eigen::Matrix4Xd transform(const LaserLine& line);
 };
 
 typedef boost::shared_ptr<CloudPatch> CloudPatchPtr;

@@ -26,7 +26,7 @@
 
 #include <terrain_slam/clouds.h>
 
-#include <pointmatcher/PointMatcher.h>
+// #include <pointmatcher/PointMatcher.h>
 
 #include <ceres/ceres.h>
 #include <ceres/rotation.h>
@@ -54,9 +54,8 @@ public:
    * @param      cloud_fixed  The cloud fixed
    * @param      cloud        The cloud
    */
-  Transform adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
-              const boost::shared_ptr<CloudPatch> &cloud,
-              bool grid = true);
+  Eigen::Matrix4d adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
+                   const boost::shared_ptr<CloudPatch> &cloud);
 
   /**
    * @brief Restarts the Ceres problem
@@ -83,11 +82,11 @@ public:
                      double xy_resolution,
                      double z_resolution,
                      double yaw_resolution);
-  void adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
-              const boost::shared_ptr<CloudPatch> &cloud);
+  Eigen::Matrix4d adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
+                         const boost::shared_ptr<CloudPatch> &cloud);
   double computeCost(const boost::shared_ptr<CloudPatch> &cloud_fixed,
                     const boost::shared_ptr<CloudPatch> &cloud,
-                    const Transform& tf);
+                    const Eigen::Matrix4d& tf);
 private:
   double x_min_;
   double x_max_;
@@ -114,9 +113,8 @@ class AdjusterCostFunctor {
 public:
   AdjusterCostFunctor(const boost::shared_ptr<CloudPatch> &c,
                       const Eigen::Vector4d &pt,
-                      const bool& grid,
                       const double& r, const double& p)
-      : c_(c), p_(pt), roll(r), pitch(p), grid_(grid) {
+      : c_(c), p_(pt), roll(r), pitch(p) {
     // empty
   }
 
@@ -149,7 +147,7 @@ public:
     Eigen::Vector4d pt = T * p;
 
     // Find three closest points in cloud
-    std::vector<Eigen::Vector4d> nn = c_->kNN(pt, 1, grid_);
+    std::vector<Eigen::Vector4d> nn = c_->kNN(pt, 1);
 
     // Calculate distance to point
     Eigen::Vector4d p1(nn.at(0));
@@ -179,7 +177,6 @@ public:
 protected:
   boost::shared_ptr<CloudPatch> c_;
   Eigen::Vector4d p_;
-  bool grid_;
   double roll;
   double pitch;
 };  // class
