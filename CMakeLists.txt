@@ -42,7 +42,8 @@ if (OPENMP_FOUND)
 endif()
 
 # include helper file
-# include( ${CGAL_USE_FILE} )
+find_package(CGAL)
+include( ${CGAL_USE_FILE} )
 
 # ${CGAL_LIBRARIES} ${CGAL_3RD_PARTY_LIBRARIES}
 # ${GDAL_LIBRARIES}
@@ -98,6 +99,7 @@ add_library(graph src/graph.cpp)
 target_link_libraries(graph ${g2o_LIBRARIES})
 
 add_executable(terrain_slam src/terrain_slam.cpp
+                            src/greedy_projector.cpp
                             src/clouds.cpp
                             src/transform.cpp
                             ${MY_HEADERS})
@@ -106,9 +108,8 @@ add_executable(terrain_slam src/terrain_slam.cpp
 # target_link_libraries(resampling ${PCL_LIBRARIES})
 
 add_executable(greedy_projection src/greedy_projection.cpp)
-target_link_libraries(greedy_projection ${PCL_LIBRARIES})
-
-# add_to_cached_list(CGAL_EXECUTABLE_TARGETS terrain_slam)
+target_link_libraries(greedy_projection ${PCL_LIBRARIES} ${CGAL_LIBRARIES} ${CGAL_3RD_PARTY_LIBRARIES})
+add_to_cached_list(CGAL_EXECUTABLE_TARGETS greedy_projection)
 
 # Link the executable to CGAL and third-party libraries
 target_link_libraries(terrain_slam  Boost::program_options

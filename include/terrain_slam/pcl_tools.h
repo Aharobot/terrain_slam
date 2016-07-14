@@ -23,6 +23,8 @@
 #ifndef PCL_TOOLS_H
 #define PCL_TOOLS_H
 
+#include <terrain_slam/greedy_projector.h>
+
 // Generic pcl
 #include <pcl/common/common.h>
 #include <pcl/io/pcd_io.h>
@@ -119,21 +121,22 @@ static void removeOutliers(
   pcl::ConditionalRemoval<pcl::PointXYZ> condrem;
   condrem.setCondition(range_cond);
   condrem.setInputCloud(cloud_in);
-  condrem.setKeepOrganized(true);
+  condrem.setKeepOrganized(false);
   // apply filter
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>());
   condrem.filter(*cloud_filtered);
 
-  std::cout << "Conditional remover: Before: " << cloud_in->size() << " after: " << cloud_filtered->size() << std::endl;
+  std::cout << "ConditionalRemoval: Before: " << cloud_in->size() << " after: " << cloud_filtered->size() << std::endl;
 
   // Remove points that have less than N neighbours in a radius
   pcl::RadiusOutlierRemoval<pcl::PointXYZ> outrem;
   // build the filter
-  outrem.setInputCloud(cloud_in);
+  outrem.setInputCloud(cloud_filtered);
   outrem.setRadiusSearch(radius);
   outrem.setMinNeighborsInRadius(neighbors);
   // apply filter
   outrem.filter(*cloud_out);
+  std::cout << "RadiusOutlierRemoval: Before: " << cloud_filtered->size() << " after: " << cloud_out->size() << std::endl;
 }
 
 static void exaggerateZ(
@@ -165,6 +168,18 @@ static bool pointInTriangle(const pcl::PointXY& pt,
 
 static pcl::PointXYZ interpolate(const pcl::PointXY& pt,
                                  const pcl::PointXYZ& p1,
+                                 const pcl::PointXYZ& p2) {
+  double dp2p1 = sqrt((p2.x - p1.x)*(p2.x - p1.x)+(p2.y - p1.y)*(p2.y - p1.y));
+  double dptp1 = sqrt((pt.x - p1.x)*(pt.x - p1.x)+(pt.y - p1.y)*(pt.y - p1.y));
+  double dptp2 = dp2p1 - dptp1;
+  double w1 = dptp1/dp2p1;
+  double w2 = dptp2/dp2p1;
+  double z = p1.z*w1 + p2.z*w2;
+  return pcl::PointXYZ(pt.x, pt.y, z);
+}
+
+static pcl::PointXYZ interpolate(const pcl::PointXY& pt,
+                                 const pcl::PointXYZ& p1,
                                  const pcl::PointXYZ& p2,
                                  const pcl::PointXYZ& p3) {
   double A = (p2.y - p1.y)*(p3.z-p1.z)-(p3.y-p1.y)*(p2.z-p1.z);
@@ -173,6 +188,17 @@ static pcl::PointXYZ interpolate(const pcl::PointXY& pt,
   double D = -(A*p1.x + B*p1.y + C*p1.z);
   double z = -(A*pt.x + B*pt.y + D) / C;
   return pcl::PointXYZ(pt.x, pt.y, z);
+}
+
+static pcl::PointXYZ interpolate(const pcl::PointXY& pt,
+                                 const std::vector<pcl::PointXYZ>& points) {
+  if (points.size() == 1) {
+    return points[0];
+  } else if (points.size() == 2) {
+    return interpolate(pt, points[0], points[1]);
+  } else if (points.size() == 3) {
+    return interpolate(pt, points[0], points[1], points[2]);
+  }
 }
 
 static int numNeighboursAtLocation(const pcl::PointXY& query_pt,
@@ -265,6 +291,47 @@ static void randomlySample(
       }
     }
 
+    if (it > num_points*1e4) {
+      std::cout << "[WARN]: More than 10000 times normal iterations. Something is wrong here! (n is " << n << ")" << std::endl;
+      break;
+    }
+    it++;
+  }
+}
+
+static void randomlySampleGP(
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_in,
+          int num_points,
+          double radius_search,
+          pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_out) {
+  // Prepare the alpha shape
+  GreedyProjector gp;
+  gp.setInputCloud(cloud_in);
+
+  // Get min and max points
+  pcl::PointXYZ min_pt, max_pt;
+  pcl::getMinMax3D(*cloud_in, min_pt, max_pt);
+  double range_x = max_pt.x - min_pt.x;
+  double range_y = max_pt.y - min_pt.y;
+
+  // Generate random number between zero and one
+  boost::random::mt19937 gen;
+  boost::random::uniform_real_distribution<double> dist(0.0, 1.0);
+
+  int n = 0;
+  int it = 0;
+  while (n < num_points) {
+    // Pick a random point
+    pcl::PointXY sp;
+    sp.x = min_pt.x + range_x*dist(gen);
+    sp.y = min_pt.y + range_y*dist(gen);
+    std::vector<pcl::PointXYZ> points = gp.locate(sp);
+    if (points.size() > 0) {
+      pcl::PointXYZ op;
+      op = interpolate(sp, points);
+      cloud_out->push_back(op);
+      n++;
+    }
     if (it > num_points*1e4) {
       std::cout << "[WARN]: More than 10000 times normal iterations. Something is wrong here! (n is " << n << ")" << std::endl;
       break;

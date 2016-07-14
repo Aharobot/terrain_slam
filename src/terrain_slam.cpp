@@ -123,28 +123,39 @@ void terrain_slam::TerrainSlam::process() {
     // findTransform(patches_, 14, 21);
     // findTransform(patches_, 0, 27);
 
-    // omp_set_num_threads(3); // Use 4 threads for all consecutive parallel regions
-    // #pragma omp parallel for
+    // Save original clouds
+    for (size_t i = 0; i < patches_.size(); i++) {
+      Eigen::Isometry3d pose = graph_->getVertexPose(i);
+      CloudPatchPtr c(patches_.at(i));
+      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_tf(new pcl::PointCloud<pcl::PointXYZ>());
+      pcl::transformPointCloud(*c->cloud, *cloud_tf, pose.matrix());
+      pcl_tools::saveCloud(cloud_tf, "global", c->getId());
+      pcl_tools::saveCloud(c->cloud, "local", c->getId());
+    }
+
     for (size_t i = 0; i < candidates.size(); i++) {
       int id1 = candidates[i].first;
       int id2 = candidates[i].second;
-      // std::cout << "[INFO]: Find transform between " << id1 << " and " << id2 << std::endl;
       Eigen::Matrix4d edge;
       bool res = findTransform(patches_, id1, id2, edge);
       if (res) {
         Eigen::Isometry3d edge_iso = eigen_tools::toIsometry(edge);
         graph_->addEdge(id1, id2, edge_iso, LC_WEIGHT);
         graph_->run();
-        // Save results
         graph_->saveGraph();
       }
-
     }
-
     graph_->run();
-
-    // Save results
     graph_->saveGraph();
+
+    // save optimized clouds
+    for (size_t i = 0; i < patches_.size(); i++) {
+      Eigen::Isometry3d pose = graph_->getVertexPose(i);
+      CloudPatchPtr c(patches_.at(i));
+      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_tf(new pcl::PointCloud<pcl::PointXYZ>());
+      pcl::transformPointCloud(*c->cloud, *cloud_tf, pose.matrix());
+      pcl_tools::saveCloud(cloud_tf, "final", c->getId());
+    }
   }
 }
 
@@ -345,6 +356,8 @@ terrain_slam::TerrainSlam::lookForCandidates(
     vector<pair<int, int> >& candidates) {
   cout << "[INFO]: Looking for candidates... " << endl;
 
+  // TODO sorting
+
   vector<vector<int> > neighbors(patches.size());
   for (size_t i = 0; i < patches.size(); i++) {
     vector<double> distance;
@@ -375,27 +388,29 @@ bool terrain_slam::TerrainSlam::processCloud(const CloudPatchPtr& c, pcl::PointC
   // Remove outliers
   std::cout << "Removing outliers..." << std::endl;
   pcl::PointCloud<pcl::PointXYZ>::Ptr filtered(new pcl::PointCloud<pcl::PointXYZ>());
-  double min_z = 0.5;   // m
+  double min_z = 1.5;   // m
   double max_z = 10.0;  // m
-  double neighbors_radius = 0.3;  // m
-  int min_neighbors = 50;
+  double neighbors_radius = 0.1;  // m
+  int min_neighbors = 10;
   pcl_tools::removeOutliers(cloud, min_z, max_z, neighbors_radius, min_neighbors, filtered);
+
+  pcl_tools::saveCloud(filtered, "outl", c->getId());
 
   if (filtered->size() < min_pts_) return false;
 
-  // Voxel Grid filter
-  std::cout << "Voxel filtering the cloud..." << std::endl;
-  pcl::PointCloud<pcl::PointXYZ>::Ptr vgrid(new pcl::PointCloud<pcl::PointXYZ>);
-  pcl_tools::voxelGrid(filtered, 0.05, vgrid);
+  // // Voxel Grid filter
+  // std::cout << "Voxel filtering the cloud..." << std::endl;
+  // pcl::PointCloud<pcl::PointXYZ>::Ptr vgrid(new pcl::PointCloud<pcl::PointXYZ>);
+  // pcl_tools::voxelGrid(filtered, 0.05, vgrid);
 
-  if (vgrid->size() < min_pts_) return false;
+  // if (vgrid->size() < min_pts_) return false;
 
   // Radomly sampling the cloud
   std::cout << "Randomly downsampling the cloud... " ;
   pcl::PointCloud<pcl::PointXYZ>::Ptr source_grid(new pcl::PointCloud<pcl::PointXYZ>());
   int num_points = 8000;
   double radius_search = 0.25;
-  pcl_tools::randomlySample(vgrid, num_points, radius_search, output);
+  pcl_tools::randomlySampleGP(filtered, num_points, radius_search, output);
   if (output->points.size() < num_points) {
     pcl_tools::voxelGrid(filtered, 0.1, output);
   }
@@ -421,43 +436,40 @@ bool terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
   //                                     0.5));    // yaw resolution
   CloudPatchPtr c1(c.at(id1));
   CloudPatchPtr c2(c.at(id2));
-  // c1->save(id1, std::string("../adjusted"));
-  // c2->save(id2, std::string("../adjusted"));
-
-  pcl::PointCloud<pcl::PointXYZ>::Ptr source_grid(new pcl::PointCloud<pcl::PointXYZ>());
-  pcl::PointCloud<pcl::PointXYZ>::Ptr target_grid(new pcl::PointCloud<pcl::PointXYZ>());
   pcl::PointCloud<pcl::PointXYZ>::Ptr source_orig(new pcl::PointCloud<pcl::PointXYZ>());
   pcl::PointCloud<pcl::PointXYZ>::Ptr target_orig(new pcl::PointCloud<pcl::PointXYZ>());
-
-  pcl_tools::saveCloud(c1->cloud, "orig", id1);
-  pcl_tools::saveCloud(c2->cloud, "orig", id2);
-
   source_orig = c1->cloud;
   target_orig = c2->cloud;
 
+  // Preprocess clouds (remove outliers, grid and random sample)
+  pcl::PointCloud<pcl::PointXYZ>::Ptr source_grid(new pcl::PointCloud<pcl::PointXYZ>());
+  bool res1 = processCloud(c1, source_grid);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr target_grid(new pcl::PointCloud<pcl::PointXYZ>());
+  bool res2 = processCloud(c2, target_grid);
 
-  if (processCloud(c1, source_grid) && processCloud(c2, target_grid)) {
-    Eigen::Matrix4d relative = c1->transform.T.inverse()*c2->transform.T;
-
+  if (res1 && res2) {
+    // Copy the grids to the patches
     c1->cloud = source_grid;
     c2->cloud = target_grid;
 
-    std::cout << "Running adjuster (random)... " << std::endl;
+    // Prepare KdTree structure for kNN
     c1->updateSearchTree();
-    Eigen::Matrix4Xd t = adj_->adjust(c1, c2);
 
+    std::cout << "Running adjuster (random)... " << std::endl;
+    Eigen::Matrix4Xd relative = adj_->adjust(c1, c2);
+
+    // Transform pointcloud and save them for debugging
     pcl::PointCloud<pcl::PointXYZ>::Ptr target_tf(new pcl::PointCloud<pcl::PointXYZ>());
-    pcl::transformPointCloud(*target_grid, *target_tf, t.cast<float>());
+    pcl::transformPointCloud(*target_grid, *target_tf, relative.cast<float>());
     std::ostringstream os;
     os << "tf_" << id1 << "_" << id2;
     pcl_tools::saveCloud(source_grid, os.str(), id1);
     pcl_tools::saveCloud(target_tf, os.str(), id2);
 
-    transform = relative*t;
-
+    // Return points at original state and save the transformation
     c1->cloud = source_orig;
     c2->cloud = target_orig;
-
+    c2->transform.T = c1->transform.T*relative;
     return true;
   } else {
     return false;

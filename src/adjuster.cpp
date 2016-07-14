@@ -107,9 +107,9 @@ terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
   solver_options.initial_trust_region_radius = solver_options.max_trust_region_radius; // 4.0;
   solver_options.max_solver_time_in_seconds = 60;
 
-  solver_options.parameter_tolerance = 1e-6;
+  solver_options.parameter_tolerance = 1e-8;
   solver_options.function_tolerance  = 1e-6;  // default 1e-6
-  solver_options.gradient_tolerance  = 1e-6;
+  solver_options.gradient_tolerance  = 1e-8;
   solver_options.minimizer_progress_to_stdout = true;
 
   ceres::Solver::Summary sum;
