@@ -28,6 +28,7 @@ typedef CGAL::Triangulation_2<K, ATds>::Locate_type              Locate_type;
 class GreedyProjector {
  public:
   GreedyProjector();
+  GreedyProjector(double av);
   void setInputCloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud);
   std::vector<pcl::PointXYZ> locate(const pcl::PointXYZ& pt);
   std::vector<pcl::PointXYZ> locate(const pcl::PointXY& pt);
@@ -35,6 +36,7 @@ class GreedyProjector {
 
  private:
   bool init_;
+  double alpha_value_;
   boost::shared_ptr<Alpha_shape_2> alpha_;
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_;
 };

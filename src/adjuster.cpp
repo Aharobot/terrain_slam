@@ -98,7 +98,7 @@ terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
   ceres::Solver::Options solver_options;
 
   // Local Optimization
-  solver_options.linear_solver_type = ceres::DENSE_QR;
+  solver_options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY; //DENSE_QR
   solver_options.max_num_iterations = 100;
   solver_options.minimizer_progress_to_stdout = true;
   solver_options.num_threads = sysconf(_SC_NPROCESSORS_ONLN);
@@ -110,15 +110,20 @@ terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
   solver_options.parameter_tolerance = 1e-8;
   solver_options.function_tolerance  = 1e-6;  // default 1e-6
   solver_options.gradient_tolerance  = 1e-8;
-  solver_options.minimizer_progress_to_stdout = true;
+  solver_options.minimizer_progress_to_stdout = false;
 
   ceres::Solver::Summary sum;
   ceres::Solve(solver_options, problem_, &sum);
-  std::cout << sum.FullReport() << "\n";
+
+  // std::cout << sum.FullReport() << "\n";
+
+  bool convergence = false;
+  if (sum.termination_type == ceres::CONVERGENCE) convergence = true;
 
   std::cout << "Before: (" << relative.x() << ", " << relative.y() << ", " << relative.z() << "); (" << relative.roll() << ", " << relative.pitch() << ", " << relative.yaw() << ")" << std::endl;
   std::cout << "After:  (" << tx << ", " << ty << ", " << tz << "); (" << roll << ", " << pitch << ", " << yaw << ")" << std::endl;
-
+  std::cout << "FINAL COST: " << sum.final_cost << std::endl;
+  std::cout << "CONVERGENCE? " << convergence << std::endl;
 
   // std::string path("../adjusted");
   // std::ostringstream suffix;

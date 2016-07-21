@@ -4,6 +4,14 @@ GreedyProjector::GreedyProjector()
   : alpha_(new Alpha_shape_2()),
   cloud_(new pcl::PointCloud<pcl::PointXYZ>()) {
   init_ = false;
+  alpha_value_ = 0.1;
+}
+
+GreedyProjector::GreedyProjector(double av)
+  : alpha_(new Alpha_shape_2()),
+  cloud_(new pcl::PointCloud<pcl::PointXYZ>()) {
+  init_ = false;
+  alpha_value_ = av;
 }
 
 void GreedyProjector::setInputCloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud) {
@@ -16,7 +24,7 @@ void GreedyProjector::setInputCloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr& c
   }
 
   // Create alpha shape (concave hull)
-  alpha_.reset(new Alpha_shape_2(point_pairs.begin(), point_pairs.end(), FT(0.1), Alpha_shape_2::GENERAL));
+  alpha_.reset(new Alpha_shape_2(point_pairs.begin(), point_pairs.end(), FT(alpha_value_), Alpha_shape_2::GENERAL));
   init_ = true;
 }
 
@@ -40,43 +48,53 @@ std::vector<pcl::PointXYZ> GreedyProjector::locate(const pcl::PointXY& pt) {
     std::cout << "[GreedyProjector] Set input cloud first!" << std::endl;
     return output;
   }
-  Locate_type loc;
-  Face_handle handle;
-  int dummy;
+
   Point point(pt.x, pt.y);
-  handle = alpha_->locate(point, loc, dummy);
-  int v0, v1, v2;
-  if(loc == Alpha_shape_2::VERTEX) {
-    // std::cout << "Delaunay::VERTEX " << std::endl;
-    v0 = handle->vertex(0)->info();
-    pcl::PointXYZ p0 = cloud_->points[v0];
-    output.push_back(p0);
-  } else if(loc == Alpha_shape_2::EDGE) {
-    // std::cout << "Delaunay::EDGE " << std::endl;
-    v0 = handle->vertex(0)->info();
-    v1 = handle->vertex(1)->info();
-    pcl::PointXYZ p0 = cloud_->points[v0];
-    pcl::PointXYZ p1 = cloud_->points[v1];
-    output.push_back(p0);
-    output.push_back(p1);
-  } else if(loc == Alpha_shape_2::FACE) {
-    // std::cout << "Delaunay::FACE " << std::endl;
-    v0 = handle->vertex(0)->info();
-    v1 = handle->vertex(1)->info();
-    v2 = handle->vertex(2)->info();
-    pcl::PointXYZ p0 = cloud_->points[v0];
-    pcl::PointXYZ p1 = cloud_->points[v1];
-    pcl::PointXYZ p2 = cloud_->points[v2];
-    output.push_back(p0);
-    output.push_back(p1);
-    output.push_back(p2);
-  } else if(loc == Alpha_shape_2::OUTSIDE_CONVEX_HULL){
-    // std::cout << "Delaunay::OUTSIDE_CONVEX_HULL " << std::endl;
-  } else if(loc == Alpha_shape_2::OUTSIDE_AFFINE_HULL){
-    // std::cout << "Delaunay::OUTSIDE_AFFINE_HULL " << std::endl;
-  } else {
-    std::cout << "Serious error: unknown Locate_type: " << loc << std::endl;
+    // Check that the point belongs to the alpha complex
+  Alpha_shape_2::Classification_type c = alpha_->classify(point);
+
+  if (c != Alpha_shape_2::EXTERIOR) {
+    Locate_type loc;
+    Face_handle handle;
+    int vertex_or_edge_idx;
+    // Locate the point in the mesh
+    handle = alpha_->locate(point, loc, vertex_or_edge_idx);
+
+    int v0, v1, v2;
+    if(loc == Alpha_shape_2::VERTEX) {
+      // std::cout << "Delaunay::VERTEX " << std::endl;
+      v0 = handle->vertex(0)->info();
+      pcl::PointXYZ p0 = cloud_->points[v0];
+      output.push_back(p0);
+    } else if(loc == Alpha_shape_2::EDGE) {
+      // std::cout << "Delaunay::EDGE " << std::endl;
+      v0 = handle->vertex(0)->info();
+      v1 = handle->vertex(1)->info();
+      pcl::PointXYZ p0 = cloud_->points[v0];
+      pcl::PointXYZ p1 = cloud_->points[v1];
+      output.push_back(p0);
+      output.push_back(p1);
+    } else if(loc == Alpha_shape_2::FACE) {
+      // std::cout << "Delaunay::FACE " << std::endl;
+      v0 = handle->vertex(0)->info();
+      v1 = handle->vertex(1)->info();
+      v2 = handle->vertex(2)->info();
+      pcl::PointXYZ p0 = cloud_->points[v0];
+      pcl::PointXYZ p1 = cloud_->points[v1];
+      pcl::PointXYZ p2 = cloud_->points[v2];
+      output.push_back(p0);
+      output.push_back(p1);
+      output.push_back(p2);
+    } else if(loc == Alpha_shape_2::OUTSIDE_CONVEX_HULL){
+      // std::cout << "Delaunay::OUTSIDE_CONVEX_HULL " << std::endl;
+    } else if(loc == Alpha_shape_2::OUTSIDE_AFFINE_HULL){
+      // std::cout << "Delaunay::OUTSIDE_AFFINE_HULL " << std::endl;
+    } else {
+      std::cout << "Serious error: unknown Locate_type: " << loc << std::endl;
+    }
   }
+
+
   return output;
 }
 

@@ -43,6 +43,13 @@
 #include <pcl/registration/correspondence_types.h>
 #include <pcl/surface/mls.h>
 
+#include <pcl/sample_consensus/method_types.h>
+#include <pcl/sample_consensus/model_types.h>
+#include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/search/kdtree.h>
+#include <pcl/segmentation/extract_clusters.h>
+#include <pcl/filters/extract_indices.h>
+
 #include <boost/random/uniform_real_distribution.hpp>
 
 #include <string>
@@ -126,7 +133,7 @@ static void removeOutliers(
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>());
   condrem.filter(*cloud_filtered);
 
-  std::cout << "ConditionalRemoval: Before: " << cloud_in->size() << " after: " << cloud_filtered->size() << std::endl;
+  // std::cout << "ConditionalRemoval: Before: " << cloud_in->size() << " after: " << cloud_filtered->size() << std::endl;
 
   // Remove points that have less than N neighbours in a radius
   pcl::RadiusOutlierRemoval<pcl::PointXYZ> outrem;
@@ -136,7 +143,7 @@ static void removeOutliers(
   outrem.setMinNeighborsInRadius(neighbors);
   // apply filter
   outrem.filter(*cloud_out);
-  std::cout << "RadiusOutlierRemoval: Before: " << cloud_filtered->size() << " after: " << cloud_out->size() << std::endl;
+  // std::cout << "RadiusOutlierRemoval: Before: " << cloud_filtered->size() << " after: " << cloud_out->size() << std::endl;
 }
 
 static void exaggerateZ(
@@ -305,7 +312,7 @@ static void randomlySampleGP(
           double radius_search,
           pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_out) {
   // Prepare the alpha shape
-  GreedyProjector gp;
+  GreedyProjector gp(0.04);
   gp.setInputCloud(cloud_in);
 
   // Get min and max points
@@ -518,6 +525,65 @@ static void smooth(
 //   pcl_tools::exaggerateZ(input_grid, multiplier, output);
 //   pcl_tools::saveCloud(output, "exag", id);
 // }
+
+
+static void segmentation(pcl::PointCloud<pcl::PointXYZ>::ConstPtr source, pcl::PointCloud<pcl::PointXYZ>::Ptr segmented)
+{
+  std::cout << "segmentation..." << std::flush;
+  // fit plane and keep points above that plane
+  pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
+  pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
+  // Create the segmentation object
+  pcl::SACSegmentation<pcl::PointXYZ> seg;
+  // Optional
+  seg.setOptimizeCoefficients (true);
+  // Mandatory
+  seg.setModelType (pcl::SACMODEL_PLANE);
+  seg.setMethodType (pcl::SAC_RANSAC);
+  seg.setDistanceThreshold (0.2);
+
+  seg.setInputCloud (source);
+  seg.segment (*inliers, *coefficients);
+
+  pcl::ExtractIndices<pcl::PointXYZ> extract;
+  extract.setInputCloud (source);
+  extract.setIndices (inliers);
+  extract.setNegative (true);
+
+  extract.filter (*segmented);
+  std::vector<int> indices;
+  pcl::removeNaNFromPointCloud(*segmented, *segmented, indices);
+  std::cout << "OK" << std::endl;
+
+  std::cout << "clustering..." << std::flush;
+  // euclidean clustering
+  typename pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
+  tree->setInputCloud (segmented);
+
+  std::vector<pcl::PointIndices> cluster_indices;
+  pcl::EuclideanClusterExtraction<pcl::PointXYZ> clustering;
+  clustering.setClusterTolerance (0.2); // 20cm
+  clustering.setMinClusterSize (1000);
+  clustering.setMaxClusterSize (250000);
+  clustering.setSearchMethod (tree);
+  clustering.setInputCloud(segmented);
+  clustering.extract (cluster_indices);
+
+  if (cluster_indices.size() > 0)//use largest cluster
+  {
+    std::cout << cluster_indices.size() << " clusters found";
+    if (cluster_indices.size() > 1)
+      std::cout <<" Using largest one...";
+    std::cout << std::endl;
+    typename pcl::IndicesPtr indices (new std::vector<int>);
+    *indices = cluster_indices[0].indices;
+    extract.setInputCloud (segmented);
+    extract.setIndices (indices);
+    extract.setNegative (false);
+
+    extract.filter (*segmented);
+  }
+}
 
 }  // namespace
 
