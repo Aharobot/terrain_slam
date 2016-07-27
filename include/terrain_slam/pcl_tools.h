@@ -490,43 +490,6 @@ static void smooth(
   std::cout << "Process OUT " << std::endl;
 }
 
-// static void preprocessCloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr& input, int id, pcl::PointCloud<pcl::PointXYZ>::Ptr& output) {
-//   // Smooth clouds
-//   std::cout << "Smoothing cloud " << id << std::endl;
-//   pcl::PointCloud<pcl::PointNormal>::Ptr input_smoothed(new pcl::PointCloud<pcl::PointNormal>());
-//   pcl::PointCloud<pcl::PointXYZ>::Ptr input_smoothed2(new pcl::PointCloud<pcl::PointXYZ>());
-//   pcl_tools::smooth(input, input_smoothed);
-//   pcl_tools::saveCloud(input_smoothed, "smooth", id);
-
-//   pcl::copyPointCloud(*input_smoothed, *input_smoothed2);
-
-//   // Remove outliers
-//   std::cout << "Removing outliers " << id << std::endl;
-//   pcl::PointCloud<pcl::PointXYZ>::Ptr input_filt(new pcl::PointCloud<pcl::PointXYZ>());
-//   double min_z = 0.5;   // m
-//   double max_z = 10.0;  // m
-//   double neighbors_radius = 0.4;  // m
-//   int min_neighbors = 40;
-//   pcl_tools::removeOutliers(input_smoothed2, min_z, max_z, neighbors_radius, min_neighbors, input_filt);
-//   pcl_tools::saveCloud(input_filt, "outl", id);
-
-//   // Sampling the cloud
-//   std::cout << "Sampling the cloud " << id << std::endl;
-//   pcl::PointCloud<pcl::PointXYZ>::Ptr input_grid(new pcl::PointCloud<pcl::PointXYZ>());
-//   int num_points = 2000;
-//   double radius_search = 0.25;
-//   pcl_tools::randomlySample(input_filt, num_points, radius_search, input_grid);
-//   pcl_tools::saveCloud(input_grid, "grid", id);
-
-//   // Exaggerate Z component
-//   std::cout << "Exaggerating Z component " << id << std::endl;
-//   pcl::PointCloud<pcl::PointXYZ>::Ptr input_ex(new pcl::PointCloud<pcl::PointXYZ>());
-//   double multiplier = 4.0;
-//   pcl_tools::exaggerateZ(input_grid, multiplier, output);
-//   pcl_tools::saveCloud(output, "exag", id);
-// }
-
-
 static void segmentation(pcl::PointCloud<pcl::PointXYZ>::ConstPtr source, pcl::PointCloud<pcl::PointXYZ>::Ptr segmented)
 {
   std::cout << "segmentation..." << std::flush;

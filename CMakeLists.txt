@@ -111,6 +111,15 @@ add_executable(greedy_projection src/greedy_projection.cpp)
 target_link_libraries(greedy_projection ${PCL_LIBRARIES} ${CGAL_LIBRARIES} ${CGAL_3RD_PARTY_LIBRARIES})
 add_to_cached_list(CGAL_EXECUTABLE_TARGETS greedy_projection)
 
+add_executable(don_segmentation src/don_segmentation.cpp)
+target_link_libraries(don_segmentation ${PCL_LIBRARIES})
+
+add_executable(supervoxel_clustering src/supervoxel_clustering.cpp)
+target_link_libraries(supervoxel_clustering ${PCL_LIBRARIES})
+
+add_executable(region_growing src/region_growing.cpp)
+target_link_libraries(region_growing ${PCL_LIBRARIES})
+
 # Link the executable to CGAL and third-party libraries
 target_link_libraries(terrain_slam  Boost::program_options
                                     Boost::system

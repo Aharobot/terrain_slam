@@ -123,15 +123,16 @@ void terrain_slam::TerrainSlam::process() {
     // findTransform(patches_, 14, 21);
     // findTransform(patches_, 0, 27);
 
-    // // Save original clouds
-    // for (size_t i = 0; i < patches_.size(); i++) {
-    //   Eigen::Isometry3d pose = graph_->getVertexPose(i);
-    //   CloudPatchPtr c(patches_.at(i));
-    //   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_tf(new pcl::PointCloud<pcl::PointXYZ>());
-    //   pcl::transformPointCloud(*c->cloud, *cloud_tf, pose.matrix());
-    //   pcl_tools::saveCloud(cloud_tf, "global", c->getId());
-    //   pcl_tools::saveCloud(c->cloud, "local", c->getId());
-    // }
+    // Save original clouds
+    std::cout << "Saving original clouds..." << std::endl;
+    for (size_t i = 0; i < patches_.size(); i++) {
+      Eigen::Isometry3d pose = graph_->getVertexPose(i);
+      CloudPatchPtr c(patches_.at(i));
+      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_tf(new pcl::PointCloud<pcl::PointXYZ>());
+      pcl::transformPointCloud(*c->cloud, *cloud_tf, pose.matrix());
+      pcl_tools::saveCloud(cloud_tf, "global", c->getId());
+      pcl_tools::saveCloud(c->cloud, "local", c->getId());
+    }
 
     for (size_t i = 0; i < candidates.size(); i++) {
       int id1 = candidates[i].first;
@@ -226,8 +227,6 @@ void terrain_slam::TerrainSlam::readFiles(const vector<string> &cloud_names,
     int num_points = 0;
     vector<Eigen::Vector3d> points;
     for(CSVIterator loop(fs); loop != CSVIterator(); ++loop) {
-      // for (size_t ii = 0; ii < (*loop).size(); ii++)
-      //   std::cout << "(*loop)[" << ii << "]: " << (*loop)[ii] << std::endl;
       if (lineno == 0) {
         num_points = boost::lexical_cast<int>((*loop)[0]);
       } else if (lineno == 1) {

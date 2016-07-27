@@ -55,7 +55,7 @@ public:
    * @param      cloud        The cloud
    */
   Eigen::Matrix4d adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
-                   const boost::shared_ptr<CloudPatch> &cloud);
+                         const boost::shared_ptr<CloudPatch> &cloud);
 
   /**
    * @brief Restarts the Ceres problem
