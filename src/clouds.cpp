@@ -43,11 +43,18 @@ terrain_slam::CloudPatch::kNN(const Eigen::Vector4d& p, int n) const {
   std::vector<Eigen::Vector4d> points;
   std::vector<int> point_idx(n);
   std::vector<float> point_sq_distance(n);
-  Point sp(p(0), p(1), p(2));
+  pcl::PointXY sp;
+  sp.x = p(0);
+  sp.y = p(1);
   kdtree.nearestKSearch(sp, n, point_idx, point_sq_distance);
   for (size_t i = 0; i < point_idx.size(); i++) {
     Point pt = cloud->points[point_idx[i]];
     points.push_back(Eigen::Vector4d(pt.x, pt.y, pt.z, 1.0));
+    // if (std::abs(pt.x - sp.x) < 0.5 && std::abs(pt.y - sp.y) < 0.5) {
+    //   std::ostringstream out;
+    //   out << "Looking for point (" << sp.x << ", " << sp.y << ") its knn is (" << pt.x << ", " << pt.y << ", " << pt.z << ")";
+    //   std::cout << out.str() << std::endl;
+    // }
   }
   return points;
 }

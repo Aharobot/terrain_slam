@@ -147,29 +147,30 @@ public:
     Eigen::Vector4d pt = T * p;
 
     // Find three closest points in cloud
-    std::vector<Eigen::Vector4d> nn = c_->kNN(pt, 1);
+    std::vector<Eigen::Vector4d> nn = c_->kNN(pt, 3);
 
     // Calculate distance to point
     Eigen::Vector4d p1(nn.at(0));
+    Eigen::Vector4d p2(nn.at(1));
+    Eigen::Vector4d p3(nn.at(2));
     Eigen::Vector4d v1 = pt - p1;
 
-    // Decrease cost if points are away from camera
-    double z_dist = std::abs(v1(2));
+    // Interpolate z inside the triangle
+    A = (p2(1) - p1(1))*(p3(2)-p1(2))-(p3(1)-p1(1))*(p2(2)-p1(2));
+    B = (p2(2) - p1(2))*(p3(0)-p1(0))-(p3(2)-p1(2))*(p2(0)-p1(0));
+    C = (p2(0) - p1(0))*(p3(1)-p1(1))-(p3(0)-p1(0))*(p2(1)-p1(1));
+    D = -(A*p1(0) + B*p1(1) + C*p1(2));
+    double z = -(A*pt(0) + B*pt(1) + D) / C;
 
-    double cam_z_dist = abs(pt(2));
+    //TODO take into account distance to camera
 
-    double min_z = 1.0;
-    double max_z = 10.0;
-    double max_z_multiplier = 100.0;
-    double z_multiplier = 1.0;
-
-    if (cam_z_dist < max_z && cam_z_dist > min_z) {
-      z_multiplier = max_z_multiplier*(1 - (max_z - cam_z_dist) / (max_z - min_z));
+    if ((v1(0)*v1(0) + v1(1)*v1(1)) > 0.02)  {
+      residuals[0] = 0;
+      residuals[1] = 0.02;
+    } else {
+      residuals[0] = z; //*z_multiplier;
+      residuals[1] = 0;
     }
-
-    residuals[0] = v1(0);
-    residuals[1] = v1(1);
-    residuals[2] = v1(2)*z_multiplier;
 
     return true;
   }

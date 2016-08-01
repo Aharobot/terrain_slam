@@ -42,6 +42,7 @@
 #include <pcl/registration/correspondence_estimation.h>
 #include <pcl/registration/correspondence_types.h>
 #include <pcl/surface/mls.h>
+#include <pcl/surface/surfel_smoothing.h>
 
 #include <pcl/sample_consensus/method_types.h>
 #include <pcl/sample_consensus/model_types.h>
@@ -469,24 +470,38 @@ static void loadCloud(const std::string& folder,
 }
 
 static void smooth(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_in,
-          pcl::PointCloud<pcl::PointNormal>::Ptr& cloud_out) {
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
+    pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_out) {
   // Create a KD-Tree
   pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
 
   // Init object (second point type is for the normals, even if unused)
-  pcl::MovingLeastSquares<pcl::PointXYZ, pcl::PointNormal> mls;
   std::cout << "Process IN " << std::endl;
-
   // Set parameters
-  mls.setComputeNormals(true);
-  mls.setInputCloud(cloud_in);
-  mls.setPolynomialFit(true);
-  mls.setSearchMethod(tree);
-  mls.setSearchRadius(0.2);
+  // pcl::MovingLeastSquares<pcl::PointXYZ, pcl::PointXYZ> mls;
+  // mls.setComputeNormals(false);
+  // mls.setInputCloud(cloud_in);
+  // mls.setPolynomialFit(true);
+  // mls.setSearchMethod(tree);
+  // mls.setSearchRadius(0.4);
+  // mls.process(*cloud_out);
+
+  pcl::PointCloud<pcl::Normal>::Ptr normals;
+  pcl::NormalEstimationOMP<pcl::PointXYZ, pcl::Normal> normal_estimation;
+  normal_estimation.setInputCloud (cloud_in);
+  pcl::search::KdTree<pcl::PointXYZ>::Ptr search_tree (new pcl::search::KdTree<pcl::PointXYZ>);
+  normal_estimation.setSearchMethod (search_tree);
+  normal_estimation.setRadiusSearch (0.4);
+  normal_estimation.compute (*normals);
+
+  // pcl::SurfelSmoothing<pcl::PointXYZ, pcl::Normal> surfel_smoothing (0.5);
+  // surfel_smoothing.setInputCloud (cloud_in);
+  // surfel_smoothing.setInputNormals (normals);
+  // surfel_smoothing.setSearchMethod (search_tree);
+  // pcl::PointCloud<pcl::Normal>::Ptr output_normals;
+  // surfel_smoothing.computeSmoothedCloud (cloud_out, output_normals);
 
   // Reconstruct
-  mls.process(*cloud_out);
   std::cout << "Process OUT " << std::endl;
 }
 
@@ -503,7 +518,7 @@ static void segmentation(pcl::PointCloud<pcl::PointXYZ>::ConstPtr source, pcl::P
   // Mandatory
   seg.setModelType (pcl::SACMODEL_PLANE);
   seg.setMethodType (pcl::SAC_RANSAC);
-  seg.setDistanceThreshold (0.2);
+  seg.setDistanceThreshold (0.3);
 
   seg.setInputCloud (source);
   seg.segment (*inliers, *coefficients);

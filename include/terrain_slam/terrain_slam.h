@@ -101,6 +101,11 @@ public:
   bool findTransform(const std::vector<CloudPatchPtr> &c, int id1, int id2,
                                               Eigen::Matrix4d& transform);
 
+  void overlap(CloudPatchConstPtr c1,
+               CloudPatchConstPtr c2,
+               pcl::PointCloud<pcl::PointXYZ>::Ptr ov);
+  double area(const pcl::PointCloud<pcl::PointXYZ>::Ptr& c);
+
   bool processCloud(const CloudPatchPtr& c, pcl::PointCloud<pcl::PointXYZ>::Ptr& output);
 
   // boost::shared_ptr<BruteForceAdjuster> adj_;

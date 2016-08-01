@@ -122,10 +122,11 @@ class CloudPatch: public Vertex {
   typedef pcl::PointCloud<PointNormal>  CloudPointNormal;
 
   Cloud::Ptr cloud;
-  pcl::KdTreeFLANN<Point> kdtree;
+  pcl::PointCloud<pcl::PointXY>::Ptr cloud2d;
+  pcl::KdTreeFLANN<pcl::PointXY> kdtree;
   Transform transform;
 
-  CloudPatch() : cloud(new Cloud) {}
+  CloudPatch() : cloud(new Cloud), cloud2d(new pcl::PointCloud<pcl::PointXY>()){}
 
   void add(const CloudPatch& other_patch);
   void add(const Cloud& other_cloud);
@@ -145,11 +146,15 @@ class CloudPatch: public Vertex {
                            1);
   }
 
-  inline void updateSearchTree() { kdtree.setInputCloud(cloud); }
+  inline void updateSearchTree() {
+    pcl::copyPointCloud(*cloud, *cloud2d);
+    kdtree.setInputCloud(cloud2d);
+  }
 
 };
 
 typedef boost::shared_ptr<CloudPatch> CloudPatchPtr;
+typedef const boost::shared_ptr<CloudPatch> CloudPatchConstPtr;
 
 }   // Namespace
 

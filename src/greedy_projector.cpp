@@ -93,9 +93,60 @@ std::vector<pcl::PointXYZ> GreedyProjector::locate(const pcl::PointXY& pt) {
       std::cout << "Serious error: unknown Locate_type: " << loc << std::endl;
     }
   }
-
-
   return output;
+}
+
+/**
+ * @brief      Determines if inside.
+ *
+ * @param[in]  pt    The point
+ *
+ * @return     True if inside, False otherwise.
+ */
+bool GreedyProjector::isInside(const pcl::PointXYZ& pt) {
+  pcl::PointXY pt2;
+  pt2.x = pt.x;
+  pt2.y = pt.y;
+  return isInside(pt2);
+}
+
+double GreedyProjector::area() {
+  double acc = 0;
+  for (Finite_faces_iterator it = alpha_->finite_faces_begin(); it != alpha_->finite_faces_end(); it++) {
+    Alpha_shape_2::Face_handle face = it;
+    acc += alpha_->triangle(face).area();
+  }
+  return acc;
+}
+
+/**
+ * @brief      Determines if inside.
+ *
+ * @param[in]  pt    The point
+ *
+ * @return     True if inside, False otherwise.
+ */
+bool GreedyProjector::isInside(const pcl::PointXY& pt) {
+  if (!init_) {
+    std::cout << "[GreedyProjector] Set input cloud first!" << std::endl;
+    return false;
+  }
+
+  Point point(pt.x, pt.y);
+    // Check that the point belongs to the alpha complex
+  Alpha_shape_2::Classification_type c = alpha_->classify(point);
+
+  if (c != Alpha_shape_2::EXTERIOR) {
+    Locate_type loc;
+    Face_handle handle;
+    int vertex_or_edge_idx;
+    // Locate the point in the mesh
+    handle = alpha_->locate(point, loc, vertex_or_edge_idx);
+    if(loc == Alpha_shape_2::VERTEX || loc == Alpha_shape_2::EDGE || loc == Alpha_shape_2::FACE) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void GreedyProjector::save(void) {

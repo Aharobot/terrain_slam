@@ -147,10 +147,19 @@ add_executable(test_adjuster src/test_adjuster.cpp
                              ${MY_HEADERS})
 target_link_libraries(test_adjuster adjuster
                                     graph
-                                    # gridder
-                                    # outlier_remover
                                     ${PCL_LIBRARIES}
                                     Boost::system
                                     Boost::filesystem)
 set_property(TARGET test_adjuster PROPERTY CXX_STANDARD 11)
 set_property(TARGET test_adjuster PROPERTY CXX_STANDARD_REQUIRED ON)
+
+# add_executable(test_adjuster2 src/test_adjuster2.cpp
+#                              src/clouds.cpp
+#                              ${MY_HEADERS})
+# target_link_libraries(test_adjuster2 adjuster
+#                                     graph
+#                                     ${PCL_LIBRARIES}
+#                                     Boost::system
+#                                     Boost::filesystem)
+# set_property(TARGET test_adjuster2 PROPERTY CXX_STANDARD 11)
+# set_property(TARGET test_adjuster2 PROPERTY CXX_STANDARD_REQUIRED ON)

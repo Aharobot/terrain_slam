@@ -22,6 +22,7 @@ typedef CGAL::Delaunay_triangulation_2<K,ATds>                   AlphaDelaunay;
 typedef CGAL::Alpha_shape_2<AlphaDelaunay>                       Alpha_shape_2;
 typedef Alpha_shape_2::Point                                     Point;
 typedef Alpha_shape_2::Face_handle                               Face_handle;
+typedef Alpha_shape_2::Finite_faces_iterator                     Finite_faces_iterator;
 typedef Alpha_shape_2::Face_iterator                             Face_iterator;
 typedef CGAL::Triangulation_2<K, ATds>::Locate_type              Locate_type;
 
@@ -33,6 +34,9 @@ class GreedyProjector {
   std::vector<pcl::PointXYZ> locate(const pcl::PointXYZ& pt);
   std::vector<pcl::PointXYZ> locate(const pcl::PointXY& pt);
   void save(void);
+  bool isInside(const pcl::PointXYZ& pt);
+  bool isInside(const pcl::PointXY& pt);
+  double area();
 
  private:
   bool init_;

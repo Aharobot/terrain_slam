@@ -80,8 +80,10 @@ terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
     AdjusterCostFunctor *hcfunctor =
         new AdjusterCostFunctor(cloud_fixed, point, roll, pitch);
     ceres::CostFunction *cost_function =
-        new ceres::NumericDiffCostFunction<AdjusterCostFunctor, ceres::CENTRAL, 3, 1, 1, 1, 1>(hcfunctor);
-    problem_->AddResidualBlock(cost_function, new ceres::HuberLoss(0.5), &tx, &ty, &tz, &yaw);
+        new ceres::NumericDiffCostFunction<AdjusterCostFunctor, ceres::CENTRAL, 2, 1, 1, 1, 1>(hcfunctor);
+    problem_->AddResidualBlock(cost_function, NULL, &tx, &ty, &tz, &yaw);
+
+    // new ceres::HuberLoss(0.5)
   }
 
   // Add constrains
@@ -99,7 +101,7 @@ terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
 
   // Local Optimization
   solver_options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY; //DENSE_QR
-  solver_options.max_num_iterations = 100;
+  solver_options.max_num_iterations = 500;
   solver_options.minimizer_progress_to_stdout = true;
   solver_options.num_threads = sysconf(_SC_NPROCESSORS_ONLN);
   solver_options.num_linear_solver_threads = sysconf(_SC_NPROCESSORS_ONLN);
@@ -107,22 +109,24 @@ terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
   solver_options.initial_trust_region_radius = solver_options.max_trust_region_radius; // 4.0;
   solver_options.max_solver_time_in_seconds = 60;
 
-  solver_options.parameter_tolerance = 1e-8;
-  solver_options.function_tolerance  = 1e-6;  // default 1e-6
+  solver_options.parameter_tolerance = 1e-14;
+  solver_options.function_tolerance  = 1e-14;  // default 1e-6
   solver_options.gradient_tolerance  = 1e-8;
-  solver_options.minimizer_progress_to_stdout = false;
+  solver_options.minimizer_progress_to_stdout = true;
+
+  solver_options.use_nonmonotonic_steps = true;
 
   ceres::Solver::Summary sum;
   ceres::Solve(solver_options, problem_, &sum);
 
-  // std::cout << sum.FullReport() << "\n";
+  std::cout << sum.FullReport() << "\n";
 
   bool convergence = false;
   if (sum.termination_type == ceres::CONVERGENCE) convergence = true;
 
   std::cout << "Before: (" << relative.x() << ", " << relative.y() << ", " << relative.z() << "); (" << relative.roll() << ", " << relative.pitch() << ", " << relative.yaw() << ")" << std::endl;
   std::cout << "After:  (" << tx << ", " << ty << ", " << tz << "); (" << roll << ", " << pitch << ", " << yaw << ")" << std::endl;
-  std::cout << "FINAL COST: " << sum.final_cost << std::endl;
+  std::cout << "FINAL COST: " << sum.final_cost/(double)cloud->size() << std::endl;
   std::cout << "CONVERGENCE? " << convergence << std::endl;
 
   // std::string path("../adjusted");
