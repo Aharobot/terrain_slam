@@ -32,7 +32,6 @@ find_package(OpenMP)
 find_package(G2O REQUIRED)
 find_package(SuiteSparse REQUIRED)
 find_package(Cholmod REQUIRED)
-find_package(libnabo REQUIRED)
 find_package(PCL 1.8 REQUIRED)
 
 if (OPENMP_FOUND)
