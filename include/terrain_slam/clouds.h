@@ -123,7 +123,8 @@ class CloudPatch: public Vertex {
 
   Cloud::Ptr cloud;
   pcl::PointCloud<pcl::PointXY>::Ptr cloud2d;
-  pcl::KdTreeFLANN<pcl::PointXY> kdtree;
+  pcl::KdTreeFLANN<pcl::PointXY> kdtree2d;
+  pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
   Transform transform;
 
   CloudPatch() : cloud(new Cloud), cloud2d(new pcl::PointCloud<pcl::PointXY>()){}
@@ -136,6 +137,7 @@ class CloudPatch: public Vertex {
   Eigen::Vector3d getCentroid() const;
 
   std::vector<Eigen::Vector4d> kNN(const Eigen::Vector4d& p, int n) const;
+  std::vector<Eigen::Vector4d> kNN2d(const Eigen::Vector4d& p, int n) const;
 
   inline size_t size() const { return cloud->points.size(); }
 
@@ -148,7 +150,8 @@ class CloudPatch: public Vertex {
 
   inline void updateSearchTree() {
     pcl::copyPointCloud(*cloud, *cloud2d);
-    kdtree.setInputCloud(cloud2d);
+    kdtree2d.setInputCloud(cloud2d);
+    kdtree.setInputCloud(cloud);
   }
 
 };

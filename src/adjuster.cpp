@@ -80,7 +80,7 @@ terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
     AdjusterCostFunctor *hcfunctor =
         new AdjusterCostFunctor(cloud_fixed, point, roll, pitch);
     ceres::CostFunction *cost_function =
-        new ceres::NumericDiffCostFunction<AdjusterCostFunctor, ceres::CENTRAL, 2, 1, 1, 1, 1>(hcfunctor);
+        new ceres::NumericDiffCostFunction<AdjusterCostFunctor, ceres::CENTRAL, 3, 1, 1, 1, 1>(hcfunctor);
     problem_->AddResidualBlock(cost_function, NULL, &tx, &ty, &tz, &yaw);
 
     // new ceres::HuberLoss(0.5)
@@ -100,14 +100,16 @@ terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
   ceres::Solver::Options solver_options;
 
   // Local Optimization
-  solver_options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY; //DENSE_QR
-  solver_options.max_num_iterations = 500;
+  solver_options.minimizer_type = ceres::TRUST_REGION;
+
+  solver_options.linear_solver_type = ceres::DENSE_QR; //SPARSE_NORMAL_CHOLESKY;
+  solver_options.max_num_iterations = 5000;
   solver_options.minimizer_progress_to_stdout = true;
   solver_options.num_threads = sysconf(_SC_NPROCESSORS_ONLN);
   solver_options.num_linear_solver_threads = sysconf(_SC_NPROCESSORS_ONLN);
 
   solver_options.initial_trust_region_radius = solver_options.max_trust_region_radius; // 4.0;
-  solver_options.max_solver_time_in_seconds = 60;
+  solver_options.max_solver_time_in_seconds = 600;
 
   solver_options.parameter_tolerance = 1e-14;
   solver_options.function_tolerance  = 1e-14;  // default 1e-6

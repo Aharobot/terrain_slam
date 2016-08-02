@@ -123,22 +123,22 @@ void terrain_slam::TerrainSlam::process() {
     // findTransform(patches_, 14, 21);
     // findTransform(patches_, 0, 27);
 
-    // // Save original clouds
-    // std::cout << "Saving original clouds..." << std::endl;
-    // for (size_t i = 0; i < patches_.size(); i++) {
-    //   Eigen::Isometry3d pose = graph_->getVertexPose(i);
-    //   CloudPatchPtr c(patches_.at(i));
-    //   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_tf(new pcl::PointCloud<pcl::PointXYZ>());
-    //   pcl::transformPointCloud(*c->cloud, *cloud_tf, pose.matrix());
-    //   pcl_tools::saveCloud(cloud_tf, "global", c->getId());
-    //   pcl_tools::saveCloud(c->cloud, "local", c->getId());
-    // }
+    // Save original clouds
+    std::cout << "Saving original clouds..." << std::endl;
+    for (size_t i = 0; i < patches_.size(); i++) {
+      Eigen::Isometry3d pose = graph_->getVertexPose(i);
+      CloudPatchPtr c(patches_.at(i));
+      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_tf(new pcl::PointCloud<pcl::PointXYZ>());
+      pcl::transformPointCloud(*c->cloud, *cloud_tf, pose.matrix());
+      pcl_tools::saveCloud(cloud_tf, "global", c->getId());
+      pcl_tools::saveCloud(c->cloud, "local", c->getId());
+    }
 
-    // for (size_t i = 0; i < candidates.size(); i++) {
-      // int id1 = candidates[i].first;
-      // int id2 = candidates[i].second;
-      int id1 = 6;  // MMC
-      int id2 = 9;  // MMC
+    for (size_t i = 0; i < candidates.size(); i++) {
+      int id1 = candidates[i].first;
+      int id2 = candidates[i].second;
+      // int id1 = 6;  // MMC
+      // int id2 = 9;  // MMC
       Eigen::Matrix4d edge;
       bool res = findTransform(patches_, id1, id2, edge);
       if (res) {
@@ -147,7 +147,7 @@ void terrain_slam::TerrainSlam::process() {
         graph_->run();
         graph_->saveGraph();
       }
-    // }
+    }
 
     // Last loop closure will already optimize and save the graph
     // graph_->run();
@@ -366,7 +366,7 @@ terrain_slam::TerrainSlam::lookForCandidates(
     cout << "[INFO]: ByDistance " << i << " - ";
     for (size_t j = 0; j < neighbors[i].size(); j++) {
       if (i > neighbors[i][j]) continue;  // if 1 -> 6, 6 -> 1 too.
-      if (distance[i] < 2*patch_size_) {
+      if (distance[j] < 0.75*patch_size_) {
         pair<int, int> p = make_pair(i, neighbors[i][j]);
         // Check if the pair already exist
         if (std::find(candidates.begin(),
@@ -495,13 +495,14 @@ bool terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
   target_orig = c2->cloud;
 
 
-  pcl::PointCloud<pcl::PointXYZ>::Ptr next_cloud(new pcl::PointCloud<pcl::PointXYZ>());
-  next_cloud = c.at(id2-1)->cloud;
-  Eigen::Matrix4d tf_relative = c2->transform.T.inverse() * c.at(id2-1)->transform.T;
+  // // Add prior pointcloud
+  // pcl::PointCloud<pcl::PointXYZ>::Ptr next_cloud(new pcl::PointCloud<pcl::PointXYZ>());
+  // next_cloud = c.at(id2-1)->cloud;
+  // Eigen::Matrix4d tf_relative = c2->transform.T.inverse() * c.at(id2-1)->transform.T;
 
-  pcl::transformPointCloud(*next_cloud, *next_cloud, tf_relative.cast<float>());
+  // pcl::transformPointCloud(*next_cloud, *next_cloud, tf_relative.cast<float>());
 
-  *target_orig += *next_cloud;
+  // *target_orig += *next_cloud;
 
   // Preprocess clouds (remove outliers, grid and random sample)
   std::cout << "Preprocessing clouds..." << std::endl;
@@ -510,63 +511,63 @@ bool terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
   pcl::PointCloud<pcl::PointXYZ>::Ptr target_grid(new pcl::PointCloud<pcl::PointXYZ>());
   bool res2 = processCloud(c2, target_grid);
 
-  // Pre-align:
-  pcl::PointCloud<pcl::PointXYZ>::Ptr source_segmented(new pcl::PointCloud<pcl::PointXYZ>());
-  pcl_tools::segmentation(source_grid, source_segmented);
-  pcl_tools::saveCloud(source_segmented, "seg", c1->getId());
+  // // Pre-align:
+  // pcl::PointCloud<pcl::PointXYZ>::Ptr source_segmented(new pcl::PointCloud<pcl::PointXYZ>());
+  // pcl_tools::segmentation(source_grid, source_segmented);
+  // pcl_tools::saveCloud(source_segmented, "seg", c1->getId());
 
-  pcl::PointCloud<pcl::PointXYZ>::Ptr target_segmented(new pcl::PointCloud<pcl::PointXYZ>());
-  pcl_tools::segmentation(target_grid, target_segmented);
-  pcl_tools::saveCloud(target_segmented, "seg", c2->getId());
+  // pcl::PointCloud<pcl::PointXYZ>::Ptr target_segmented(new pcl::PointCloud<pcl::PointXYZ>());
+  // pcl_tools::segmentation(target_grid, target_segmented);
+  // pcl_tools::saveCloud(target_segmented, "seg", c2->getId());
 
-  Eigen::Vector4f source_centroid, target_centroid;
-  pcl::compute3DCentroid(*source_segmented, source_centroid);
-  pcl::compute3DCentroid(*target_segmented, target_centroid);
+  // Eigen::Vector4f source_centroid, target_centroid;
+  // pcl::compute3DCentroid(*source_segmented, source_centroid);
+  // pcl::compute3DCentroid(*target_segmented, target_centroid);
 
-  Eigen::Vector4f translation = source_centroid - target_centroid;
+  // Eigen::Vector4f translation = source_centroid - target_centroid;
 
-  Eigen::Matrix4f pre_tf = Eigen::Matrix4f::Identity();
-  pre_tf(0,3) = translation(0);
-  pre_tf(1,3) = translation(1);
-  pre_tf(2,3) = translation(2);
-  pcl::PointCloud<pcl::PointXYZ>::Ptr target_segmented_tf(new pcl::PointCloud<pcl::PointXYZ>());
-  pcl::transformPointCloud(*target_segmented, *target_segmented_tf, pre_tf);
+  // Eigen::Matrix4f pre_tf = Eigen::Matrix4f::Identity();
+  // pre_tf(0,3) = translation(0);
+  // pre_tf(1,3) = translation(1);
+  // pre_tf(2,3) = translation(2);
+  // pcl::PointCloud<pcl::PointXYZ>::Ptr target_segmented_tf(new pcl::PointCloud<pcl::PointXYZ>());
+  // pcl::transformPointCloud(*target_segmented, *target_segmented_tf, pre_tf);
 
-  pcl_tools::saveCloud(target_segmented_tf, "segtf", id2);
+  // pcl_tools::saveCloud(target_segmented_tf, "segtf", id2);
 
-  // ICP
-  std::cout << "Registering with NormalDistributionsTransform..." << std::endl;
-  bool success = false;
-  Eigen::Matrix4f tf;
-  double score = -1.0;
-  // success = pcl_tools::icp(source_segmented, target_segmented_tf, tf, score);
+  // // ICP
+  // std::cout << "Registering with NormalDistributionsTransform..." << std::endl;
+  // bool success = false;
+  // Eigen::Matrix4f tf;
+  // double score = -1.0;
+  // // success = pcl_tools::icp(source_segmented, target_segmented_tf, tf, score);
 
-  pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt;
-  ndt.setTransformationEpsilon(0.001);
-  ndt.setStepSize(0.005);
-  ndt.setResolution(0.1);
-  ndt.setMaximumIterations(200);
-  ndt.setInputSource(source_segmented);
-  ndt.setInputTarget(target_segmented_tf);
-  pcl::PointCloud<pcl::PointXYZ>::Ptr aligned(new pcl::PointCloud<pcl::PointXYZ>());
-  ndt.align(*aligned, tf);
-  score = ndt.getFitnessScore();
-  tf = ndt.getFinalTransformation();
-  success = ndt.hasConverged();
+  // pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt;
+  // ndt.setTransformationEpsilon(0.001);
+  // ndt.setStepSize(0.005);
+  // ndt.setResolution(0.1);
+  // ndt.setMaximumIterations(200);
+  // ndt.setInputSource(source_segmented);
+  // ndt.setInputTarget(target_segmented_tf);
+  // pcl::PointCloud<pcl::PointXYZ>::Ptr aligned(new pcl::PointCloud<pcl::PointXYZ>());
+  // ndt.align(*aligned, tf);
+  // score = ndt.getFitnessScore();
+  // tf = ndt.getFinalTransformation();
+  // success = ndt.hasConverged();
 
 
-  std::cout << "ICP fitness score: " << score << " converged? " << success << std::endl;
-  if (success) {
-    pcl::PointCloud<pcl::PointXYZ>::Ptr source_tf(new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::transformPointCloud(*source_grid, *source_tf, tf);
-    std::ostringstream os;
-    os << "pre_icp_" << id1 << "_" << id2;
-    pcl_tools::saveCloud(source_tf, os.str(), id1);
-    pcl_tools::saveCloud(target_grid, os.str(), id2);
+  // std::cout << "ICP fitness score: " << score << " converged? " << success << std::endl;
+  // if (success) {
+  //   pcl::PointCloud<pcl::PointXYZ>::Ptr source_tf(new pcl::PointCloud<pcl::PointXYZ>);
+  //   pcl::transformPointCloud(*source_grid, *source_tf, tf);
+  //   std::ostringstream os;
+  //   os << "pre_icp_" << id1 << "_" << id2;
+  //   pcl_tools::saveCloud(source_tf, os.str(), id1);
+  //   pcl_tools::saveCloud(target_grid, os.str(), id2);
 
-    std::cout << "PRE:\n" << pre_tf << std::endl;
-    std::cout << "POST:\n" << tf << std::endl;
-  }
+  //   std::cout << "PRE:\n" << pre_tf << std::endl;
+  //   std::cout << "POST:\n" << tf << std::endl;
+  // }
 
 
   if (res1 && res2) {
@@ -574,93 +575,95 @@ bool terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
     c1->cloud = source_grid;
     c2->cloud = target_grid;
 
-    pcl::PointCloud<pcl::PointXYZ>::Ptr source_smooth(new pcl::PointCloud<pcl::PointXYZ>());
-    pcl::PointCloud<pcl::PointXYZ>::Ptr target_smooth(new pcl::PointCloud<pcl::PointXYZ>());
-    pcl_tools::smooth(source_grid, source_smooth);
-    pcl_tools::smooth(target_grid, target_smooth);
-    pcl_tools::saveCloud(source_smooth, "smooth", id1);
-    pcl_tools::saveCloud(target_smooth, "smooth", id2);
+    //TODO smooth not working
+    // pcl::PointCloud<pcl::PointXYZ>::Ptr source_smooth(new pcl::PointCloud<pcl::PointXYZ>());
+    // pcl::PointCloud<pcl::PointXYZ>::Ptr target_smooth(new pcl::PointCloud<pcl::PointXYZ>());
+    // pcl_tools::smooth2(source_grid, *source_smooth);
+    // pcl_tools::smooth2(target_grid, *target_smooth);
 
-    // GROUND TRUTH
-    // How much I have to move c2 to register it to c1
-    double gt_x = 4.730406;
-    double gt_y = 2.4042;
-    double gt_z = 0.284647;
+    // pcl_tools::saveCloud(source_smooth, "smooth", id1);
+    // pcl_tools::saveCloud(target_smooth, "smooth", id2);
 
-    // Start from different positions
-    double xmov = 5.; //gt_x; //
-    double ymov = 5.; //gt_y; //
-    double zmov = 1.0; //gt_z; //
-    int count = 0;
+    // // GROUND TRUTH
+    // // How much I have to move c2 to register it to c1
+    // double gt_x = 4.730406;
+    // double gt_y = 2.4042;
+    // double gt_z = 0.284647;
+
+    // // Start from different positions
+    // double xmov = 5.; //gt_x; //
+    // double ymov = 5.; //gt_y; //
+    // double zmov = 1.0; //gt_z; //
+    // int count = 0;
     Eigen::Matrix4Xd original = c2->transform.T;
     Eigen::Matrix4Xd relative;
-    for (int xpos = 1; xpos < 2; xpos++) {
-      for (int ypos = 1; ypos < 2; ypos++) {
-        for (int zpos = 1; zpos < 2; zpos++) {
-          std::cout << "Running adjuster (" << count << ")... " << std::endl;
+    // for (int xpos = 1; xpos < 2; xpos++) {
+    //   for (int ypos = 1; ypos < 2; ypos++) {
+    //     for (int zpos = 1; zpos < 2; zpos++) {
+          std::cout << "Running adjuster ... " << std::endl;
 
-          c2->transform.T = original;
-          c2->transform.T(0, 3) += xpos*xmov;
-          c2->transform.T(1, 3) += ypos*ymov;
-          c2->transform.T(2, 3) += zpos*zmov;
+          // c2->transform.T = original;
+          // c2->transform.T(0, 3) += xpos*xmov;
+          // c2->transform.T(1, 3) += ypos*ymov;
+          // c2->transform.T(2, 3) += zpos*zmov;
 
-          std::cout << "Computing overlap... " << std::endl;
-          pcl::PointCloud<pcl::PointXYZ>::Ptr ov_cloud1(new pcl::PointCloud<pcl::PointXYZ>());
-          pcl::PointCloud<pcl::PointXYZ>::Ptr ov_cloud2(new pcl::PointCloud<pcl::PointXYZ>());
-          overlap(c1, c2, ov_cloud2);
-          overlap(c2, c1, ov_cloud1);
+          // std::cout << "Computing overlap... " << std::endl;
+          // pcl::PointCloud<pcl::PointXYZ>::Ptr ov_cloud1(new pcl::PointCloud<pcl::PointXYZ>());
+          // pcl::PointCloud<pcl::PointXYZ>::Ptr ov_cloud2(new pcl::PointCloud<pcl::PointXYZ>());
+          // overlap(c1, c2, ov_cloud2);
+          // overlap(c2, c1, ov_cloud1);
 
-          double orig_area_1 = area(c1->cloud);
-          double overlap_area_1 = area(ov_cloud1);
+          // double orig_area_1 = area(c1->cloud);
+          // double overlap_area_1 = area(ov_cloud1);
 
-          double orig_area_2 = area(c2->cloud);
-          double overlap_area_2 = area(ov_cloud2);
+          // double orig_area_2 = area(c2->cloud);
+          // double overlap_area_2 = area(ov_cloud2);
 
-          std::cout << "Overlap 1: " << overlap_area_1/orig_area_1*100 << "%%" << std::endl;
-          std::cout << "Overlap 2: " << overlap_area_2/orig_area_2*100 << "%%" << std::endl;
-          std::cout << "Size ratio 1/2: " << orig_area_1/orig_area_2 << "%%" << std::endl;
-          std::cout << "Overlap 1 to 2: " << overlap_area_1/orig_area_2*100 << "%%" << std::endl;
-          std::cout << "Overlap 2 to 1: " << overlap_area_2/orig_area_1*100 << "%%" << std::endl;
+          // std::cout << "Overlap 1: " << overlap_area_1/orig_area_1*100 << "%%" << std::endl;
+          // std::cout << "Overlap 2: " << overlap_area_2/orig_area_2*100 << "%%" << std::endl;
+          // std::cout << "Size ratio 1/2: " << orig_area_1/orig_area_2 << "%%" << std::endl;
+          // std::cout << "Overlap 1 to 2: " << overlap_area_1/orig_area_2*100 << "%%" << std::endl;
+          // std::cout << "Overlap 2 to 1: " << overlap_area_2/orig_area_1*100 << "%%" << std::endl;
 
-          pcl_tools::saveCloud(ov_cloud1, "overlap", id1);
-          pcl_tools::saveCloud(ov_cloud2, "overlap", id2);
+          // pcl_tools::saveCloud(ov_cloud1, "overlap", id1);
+          // pcl_tools::saveCloud(ov_cloud2, "overlap", id2);
 
-          // Save the original cloud
-          source_grid = c1->cloud;
-          target_grid = c2->cloud;
-          // Put the overlap version
-          c1->cloud = ov_cloud1;
-          c2->cloud = ov_cloud2;
+          // // Save the original cloud
+          // source_grid = c1->cloud;
+          // target_grid = c2->cloud;
+          // // Put the overlap version
+          // c1->cloud = ov_cloud1;
+          // c2->cloud = ov_cloud2;
 
 
-          // ICP
-          std::cout << "Registering with ICP..." << std::endl;
-          bool success = false;
-          Eigen::Matrix4f tf;
-          double score = -1.0;
-          success = pcl_tools::icp(source_grid, target_grid, tf, score);
-          std::cout << "ICP fitness score: " << score << std::endl;
-          if (success) {
-            pcl::PointCloud<pcl::PointXYZ>::Ptr source_tf(new pcl::PointCloud<pcl::PointXYZ>);
-            pcl::transformPointCloud(*source_grid, *source_tf, tf);
-            std::ostringstream os;
-            os << "icp_" << id1 << "_" << id2;
-            pcl_tools::saveCloud(source_tf, os.str(), id1);
-            pcl_tools::saveCloud(target_grid, os.str(), id2);
-          }
+          // // ICP
+          // std::cout << "Registering with ICP..." << std::endl;
+          // bool success = false;
+          // Eigen::Matrix4f tf;
+          // double score = -1.0;
+          // success = pcl_tools::icp(source_grid, target_grid, tf, score);
+          // std::cout << "ICP fitness score: " << score << std::endl;
+          // if (success) {
+          //   pcl::PointCloud<pcl::PointXYZ>::Ptr source_tf(new pcl::PointCloud<pcl::PointXYZ>);
+          //   pcl::transformPointCloud(*source_grid, *source_tf, tf);
+          //   std::ostringstream os;
+          //   os << "icp_" << id1 << "_" << id2;
+          //   pcl_tools::saveCloud(source_tf, os.str(), id1);
+          //   pcl_tools::saveCloud(target_grid, os.str(), id2);
+          // }
 
-          // NDT
-          std::cout << "Registering with NDT..." << std::endl;
-          success = pcl_tools::normalDistributionsTransform(source_grid, target_grid, tf, score);
-          std::cout << "ICP fitness score: " << score << std::endl;
-          if (success) {
-            pcl::PointCloud<pcl::PointXYZ>::Ptr source_tf(new pcl::PointCloud<pcl::PointXYZ>);
-            pcl::transformPointCloud(*source_grid, *source_tf, tf);
-            std::ostringstream os;
-            os << "ndt_" << id1 << "_" << id2;
-            pcl_tools::saveCloud(source_tf, os.str(), id1);
-            pcl_tools::saveCloud(target_grid, os.str(), id2);
-          }
+          // // NDT
+          // std::cout << "Registering with NDT..." << std::endl;
+          // success = pcl_tools::normalDistributionsTransform(source_grid, target_grid, tf, score);
+          // std::cout << "ICP fitness score: " << score << std::endl;
+          // if (success) {
+          //   pcl::PointCloud<pcl::PointXYZ>::Ptr source_tf(new pcl::PointCloud<pcl::PointXYZ>);
+          //   pcl::transformPointCloud(*source_grid, *source_tf, tf);
+          //   std::ostringstream os;
+          //   os << "ndt_" << id1 << "_" << id2;
+          //   pcl_tools::saveCloud(source_tf, os.str(), id1);
+          //   pcl_tools::saveCloud(target_grid, os.str(), id2);
+          // }
 
 
 
@@ -671,22 +674,22 @@ bool terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
           adj_->reset();
           relative = adj_->adjust(c1, c2);
 
-          // Put the original cloud back
-          c1->cloud = source_grid;
-          c2->cloud = target_grid;
+          // // Put the original cloud back
+          // c1->cloud = source_grid;
+          // c2->cloud = target_grid;
 
           // Transform pointcloud and save them for debugging
           pcl::PointCloud<pcl::PointXYZ>::Ptr target_tf(new pcl::PointCloud<pcl::PointXYZ>());
           pcl::transformPointCloud(*target_grid, *target_tf, relative.cast<float>());
           std::ostringstream os;
-          os << "tf_" << id1 << "_" << id2 << "_" << count;
+          os << "tf_" << id1 << "_" << id2;// << "_" << count;
           pcl_tools::saveCloud(source_grid, os.str(), id1);
           pcl_tools::saveCloud(target_tf, os.str(), id2);
 
-          count++;
-        }
-      }
-    }
+          // count++;
+    //     }
+    //   }
+    // }
 
     // Return points at original state and save the transformation
     c1->cloud = source_orig;
