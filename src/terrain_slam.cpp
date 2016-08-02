@@ -25,9 +25,6 @@
 #include <terrain_slam/eigen_tools.h>
 #include <terrain_slam/csv.h>
 
-#include <terrain_slam/features/features.h>
-#include <terrain_slam/features/keypoints.h>
-
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/shared_ptr.hpp>
