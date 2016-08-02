@@ -1,9 +1,7 @@
 # Created by the script cgal_create_cmake_script_with_options
 # This is the CMake script for compiling a set of CGAL applications.
 project( terrain_slam CXX )
-
 cmake_minimum_required(VERSION 2.6.2)
-# set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
 
 if("${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}" VERSION_GREATER 2.6)
   if("${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}.${CMAKE_PATCH_VERSION}" VERSION_GREATER 2.8.3)
@@ -21,19 +19,14 @@ endif()
 # initially
 set(EXTERNAL_LIBS "")
 
-# find_package(CGAL QUIET COMPONENTS  HINTS "/usr/local/lib/" "C:/Program Files/CGAL-4.3/build/")
-find_package(Boost REQUIRED COMPONENTS program_options filesystem thread system graph)
-set(Boost_USE_MULTITHREADED ON)
 
-find_package(OpenCV REQUIRED HINTS "/opt/ros/kinetic")
-# find_package(GDAL REQUIRED)
+find_package(OpenCV REQUIRED)
 find_package(Ceres REQUIRED)
 find_package(OpenMP)
 find_package(G2O REQUIRED)
 find_package(SuiteSparse REQUIRED)
 find_package(Cholmod REQUIRED)
-find_package(libnabo REQUIRED)
-find_package(PCL 1.8 REQUIRED)
+find_package(PCL REQUIRED)
 
 if (OPENMP_FOUND)
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
@@ -45,12 +38,14 @@ endif()
 find_package(CGAL)
 include( ${CGAL_USE_FILE} )
 
+find_package(Boost REQUIRED COMPONENTS program_options filesystem thread system graph)
+set(Boost_USE_MULTITHREADED ON)
 # ${CGAL_LIBRARIES} ${CGAL_3RD_PARTY_LIBRARIES}
 # ${GDAL_LIBRARIES}
 
 
-include_directories(${OpenCV_INCLUDE_DIRS}
-                    # ${GDAL_INCLUDE_DIRS}
+include_directories(include
+                    ${OpenCV_INCLUDE_DIRS}
                     ${Boost_INCLUDE_DIRS}
                     ${CERES_INCLUDE_DIRS}
                     ${G2O_INCLUDE_DIRS}
@@ -83,17 +78,8 @@ set(g2o_LIBRARIES
 # Workaround for MSCV - show includes in project
 FILE(GLOB_RECURSE MY_HEADERS include/*.h)
 
-# include for local directory
-include_directories(BEFORE include)
-
-# add_library(outlier_remover src/outlier_remover.cpp)
-# target_link_libraries(outlier_remover ${libnabo_LIBRARIES})
-
 add_library(adjuster src/adjuster.cpp)
 target_link_libraries(adjuster ${CERES_LIBRARIES})
-
-# add_library(gridder src/gridder.cpp)
-# target_link_libraries(gridder ${CERES_LIBRARIES})
 
 add_library(graph src/graph.cpp)
 target_link_libraries(graph ${g2o_LIBRARIES})
@@ -103,42 +89,20 @@ add_executable(terrain_slam src/terrain_slam.cpp
                             src/clouds.cpp
                             src/transform.cpp
                             ${MY_HEADERS})
-# add_executable(resampling src/resampling.cpp
-#                             ${MY_HEADERS})
-# target_link_libraries(resampling ${PCL_LIBRARIES})
-
-add_executable(greedy_projection src/greedy_projection.cpp)
-target_link_libraries(greedy_projection ${PCL_LIBRARIES} ${CGAL_LIBRARIES} ${CGAL_3RD_PARTY_LIBRARIES})
-add_to_cached_list(CGAL_EXECUTABLE_TARGETS greedy_projection)
-
-add_executable(don_segmentation src/don_segmentation.cpp)
-target_link_libraries(don_segmentation ${PCL_LIBRARIES})
-
-add_executable(supervoxel_clustering src/supervoxel_clustering.cpp)
-target_link_libraries(supervoxel_clustering ${PCL_LIBRARIES})
-
-add_executable(region_growing src/region_growing.cpp)
-target_link_libraries(region_growing ${PCL_LIBRARIES})
 
 # Link the executable to CGAL and third-party libraries
-target_link_libraries(terrain_slam  Boost::program_options
-                                    Boost::system
-                                    Boost::filesystem
+target_link_libraries(terrain_slam  ${Boost_LIBRARIES}
                                     ${OpenCV_LIBRARIES}
                                     ${SUITESPARSE_LIBRARIES}
                                     ${g2o_LIBRARIES}
                                     ${PCL_LIBRARIES}
                                     cholmod
-                                    # outlier_remover
                                     adjuster
-                                    # gridder
                                     graph)
 set_property(TARGET adjuster PROPERTY CXX_STANDARD 11)
 set_property(TARGET adjuster PROPERTY CXX_STANDARD_REQUIRED ON)
 set_property(TARGET graph PROPERTY CXX_STANDARD 11)
 set_property(TARGET graph PROPERTY CXX_STANDARD_REQUIRED ON)
-# set_property(TARGET gridder PROPERTY CXX_STANDARD 11)
-# set_property(TARGET gridder PROPERTY CXX_STANDARD_REQUIRED ON)
 set_property(TARGET terrain_slam PROPERTY CXX_STANDARD 11)
 set_property(TARGET terrain_slam PROPERTY CXX_STANDARD_REQUIRED ON)
 
@@ -148,8 +112,7 @@ add_executable(test_adjuster src/test_adjuster.cpp
 target_link_libraries(test_adjuster adjuster
                                     graph
                                     ${PCL_LIBRARIES}
-                                    Boost::system
-                                    Boost::filesystem)
+                                    ${Boost_LIBRARIES})
 set_property(TARGET test_adjuster PROPERTY CXX_STANDARD 11)
 set_property(TARGET test_adjuster PROPERTY CXX_STANDARD_REQUIRED ON)
 
@@ -162,7 +125,6 @@ add_executable(test_adjuster2 src/test_adjuster2.cpp
 target_link_libraries(test_adjuster2 adjuster
                                     graph
                                     ${PCL_LIBRARIES}
-                                    Boost::system
-                                    Boost::filesystem)
+                                    ${Boost_LIBRARIES})
 set_property(TARGET test_adjuster2 PROPERTY CXX_STANDARD 11)
 set_property(TARGET test_adjuster2 PROPERTY CXX_STANDARD_REQUIRED ON)
