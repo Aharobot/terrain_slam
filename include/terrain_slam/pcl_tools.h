@@ -470,7 +470,7 @@ static void loadCloud(const std::string& folder,
 }
 
 
-static void smooth2(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<pcl::PointXYZ>& output) {
+static void smooth(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<pcl::PointXYZ>& output) {
     // Create a KD-Tree
   pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
 
@@ -496,58 +496,6 @@ static void smooth2(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<p
   pcl::copyPointCloud(mls_points, output);
   // std::cout << "OUT" << std::endl;
 
-}
-
-static void smooth(
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
-    pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_out) {
-
-  // Init object (second point type is for the normals, even if unused)
-  std::cout << "Process IN " << std::endl;
-
-
-  // Create a KD-Tree
-  pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
-
-  // Output has the PointNormal type in order to store the normals calculated by MLS
-  pcl::PointCloud<pcl::PointNormal> mls_points;
-
-  // Init object (second point type is for the normals, even if unused)
-  pcl::MovingLeastSquares<pcl::PointXYZ, pcl::PointNormal> mls;
-
-  mls.setComputeNormals (true);
-
-  // Set parameters
-  mls.setInputCloud (cloud_in);
-  mls.setPolynomialFit (true);
-  mls.setSearchMethod (tree);
-  mls.setSearchRadius (0.8);
-
-  // Reconstruct
-  mls.process (mls_points);
-
-  pcl::copyPointCloud(mls_points, *cloud_out);
-
-
-
-  // pcl::PointCloud<pcl::Normal> normals;
-  // pcl::NormalEstimationOMP<pcl::PointXYZ, pcl::Normal> normal_estimation;
-  // normal_estimation.setInputCloud (cloud_in);
-  // pcl::search::KdTree<pcl::PointXYZ>::Ptr search_tree (new pcl::search::KdTree<pcl::PointXYZ>);
-  // normal_estimation.setSearchMethod (search_tree);
-  // normal_estimation.setRadiusSearch (0.4);
-  // normal_estimation.compute(normals);
-
-  // pcl::PointCloud<pcl::Normal>::Ptr normals_ptr(boost::make_shared<pcl::PointCloud<pcl::Normal>>(normals));
-  // pcl::SurfelSmoothing<pcl::PointXYZ, pcl::Normal> surfel_smoothing (0.5);
-  // surfel_smoothing.setInputCloud (cloud_in);
-  // surfel_smoothing.setInputNormals (normals_ptr);
-  // surfel_smoothing.setSearchMethod (search_tree);
-  // pcl::PointCloud<pcl::Normal>::Ptr output_normals(new pcl::PointCloud<pcl::Normal>());
-  // surfel_smoothing.computeSmoothedCloud (cloud_out, output_normals);
-
-  // Reconstruct
-  std::cout << "Process OUT " << std::endl;
 }
 
 static void segmentation(pcl::PointCloud<pcl::PointXYZ>::ConstPtr source, pcl::PointCloud<pcl::PointXYZ>::Ptr segmented)

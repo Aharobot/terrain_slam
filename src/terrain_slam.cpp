@@ -512,8 +512,8 @@ bool terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
     // Smooth the clouds
     pcl::PointCloud<pcl::PointXYZ>::Ptr source_smooth(new pcl::PointCloud<pcl::PointXYZ>());
     pcl::PointCloud<pcl::PointXYZ>::Ptr target_smooth(new pcl::PointCloud<pcl::PointXYZ>());
-    pcl_tools::smooth2(source_grid, *source_smooth);
-    pcl_tools::smooth2(target_grid, *target_smooth);
+    pcl_tools::smooth(source_grid, *source_smooth);
+    pcl_tools::smooth(target_grid, *target_smooth);
 
     // Copy the smoothed to the patches
     c1->cloud = source_smooth;
