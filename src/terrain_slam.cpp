@@ -120,16 +120,16 @@ void terrain_slam::TerrainSlam::process() {
     // findTransform(patches_, 14, 21);
     // findTransform(patches_, 0, 27);
 
-    // Save original clouds
-    std::cout << "Saving original clouds..." << std::endl;
-    for (size_t i = 0; i < patches_.size(); i++) {
-      Eigen::Isometry3d pose = graph_->getVertexPose(i);
-      CloudPatchPtr c(patches_.at(i));
-      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_tf(new pcl::PointCloud<pcl::PointXYZ>());
-      pcl::transformPointCloud(*c->cloud, *cloud_tf, pose.matrix());
-      pcl_tools::saveCloud(cloud_tf, "global", c->getId());
-      pcl_tools::saveCloud(c->cloud, "local", c->getId());
-    }
+    // // Save original clouds
+    // std::cout << "Saving original clouds..." << std::endl;
+    // for (size_t i = 0; i < patches_.size(); i++) {
+    //   Eigen::Isometry3d pose = graph_->getVertexPose(i);
+    //   CloudPatchPtr c(patches_.at(i));
+    //   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_tf(new pcl::PointCloud<pcl::PointXYZ>());
+    //   pcl::transformPointCloud(*c->cloud, *cloud_tf, pose.matrix());
+    //   pcl_tools::saveCloud(cloud_tf, "global", c->getId());
+    //   pcl_tools::saveCloud(c->cloud, "local", c->getId());
+    // }
 
     for (size_t i = 0; i < candidates.size(); i++) {
       int id1 = candidates[i].first;
@@ -573,10 +573,10 @@ bool terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
     c2->cloud = target_grid;
 
     //TODO smooth not working
-    // pcl::PointCloud<pcl::PointXYZ>::Ptr source_smooth(new pcl::PointCloud<pcl::PointXYZ>());
-    // pcl::PointCloud<pcl::PointXYZ>::Ptr target_smooth(new pcl::PointCloud<pcl::PointXYZ>());
-    // pcl_tools::smooth2(source_grid, *source_smooth);
-    // pcl_tools::smooth2(target_grid, *target_smooth);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr source_smooth(new pcl::PointCloud<pcl::PointXYZ>());
+    pcl::PointCloud<pcl::PointXYZ>::Ptr target_smooth(new pcl::PointCloud<pcl::PointXYZ>());
+    pcl_tools::smooth2(source_grid, *source_smooth);
+    pcl_tools::smooth2(target_grid, *target_smooth);
 
     // pcl_tools::saveCloud(source_smooth, "smooth", id1);
     // pcl_tools::saveCloud(target_smooth, "smooth", id2);
