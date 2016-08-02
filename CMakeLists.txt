@@ -19,9 +19,10 @@ endif()
 # initially
 set(EXTERNAL_LIBS "")
 
-
-find_package(OpenCV REQUIRED)
+find_package(Eigen3 REQUIRED)
+set(Eigen_INCLUDE_DIR ${Eigen3_INCLUDE_DIRS})
 find_package(Ceres REQUIRED)
+find_package(OpenCV REQUIRED)
 find_package(OpenMP)
 find_package(G2O REQUIRED)
 find_package(SuiteSparse REQUIRED)
