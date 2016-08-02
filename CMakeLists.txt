@@ -41,9 +41,6 @@ include( ${CGAL_USE_FILE} )
 
 find_package(Boost REQUIRED COMPONENTS program_options filesystem thread system graph)
 set(Boost_USE_MULTITHREADED ON)
-# ${CGAL_LIBRARIES} ${CGAL_3RD_PARTY_LIBRARIES}
-# ${GDAL_LIBRARIES}
-
 
 include_directories(include
                     ${OpenCV_INCLUDE_DIRS}
@@ -107,7 +104,18 @@ set_property(TARGET graph PROPERTY CXX_STANDARD_REQUIRED ON)
 set_property(TARGET terrain_slam PROPERTY CXX_STANDARD 11)
 set_property(TARGET terrain_slam PROPERTY CXX_STANDARD_REQUIRED ON)
 
+add_executable(evaluate_adjuster src/evaluate_adjuster.cpp
+                                 src/clouds.cpp
+                                 ${MY_HEADERS})
+target_link_libraries(evaluate_adjuster adjuster
+                                        graph
+                                        ${PCL_LIBRARIES}
+                                        ${Boost_LIBRARIES})
+set_property(TARGET evaluate_adjuster PROPERTY CXX_STANDARD 11)
+set_property(TARGET evaluate_adjuster PROPERTY CXX_STANDARD_REQUIRED ON)
+
 add_executable(test_adjuster src/test_adjuster.cpp
+                             src/greedy_projector.cpp
                              src/clouds.cpp
                              ${MY_HEADERS})
 target_link_libraries(test_adjuster adjuster
@@ -116,16 +124,3 @@ target_link_libraries(test_adjuster adjuster
                                     ${Boost_LIBRARIES})
 set_property(TARGET test_adjuster PROPERTY CXX_STANDARD 11)
 set_property(TARGET test_adjuster PROPERTY CXX_STANDARD_REQUIRED ON)
-
-add_executable(mls src/mls.cpp)
-target_link_libraries(mls ${PCL_LIBRARIES})
-add_executable(test_adjuster2 src/test_adjuster2.cpp
-                            src/greedy_projector.cpp
-                             src/clouds.cpp
-                             ${MY_HEADERS})
-target_link_libraries(test_adjuster2 adjuster
-                                    graph
-                                    ${PCL_LIBRARIES}
-                                    ${Boost_LIBRARIES})
-set_property(TARGET test_adjuster2 PROPERTY CXX_STANDARD 11)
-set_property(TARGET test_adjuster2 PROPERTY CXX_STANDARD_REQUIRED ON)

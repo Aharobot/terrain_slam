@@ -22,6 +22,7 @@
 
 #include <terrain_slam/adjuster.h>
 #include <terrain_slam/clouds.h>
+#include <terrain_slam/pcl_tools.h>
 
 #include <Eigen/Geometry>
 
@@ -29,103 +30,82 @@
 #include <pcl/common/common.h>
 
 #include <iostream>
-#include <fstream>
 #include <random>
 
-void fillData(int num_points, double overlap, boost::shared_ptr<terrain_slam::CloudPatch>& c1, boost::shared_ptr<terrain_slam::CloudPatch>& c2) {
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_real_distribution<> dis(-1, +1);
-  int inliers = num_points*overlap;
-  // std::cout << "Generating " << inliers << " inliers out of " << num_points << std::endl;
-  int outliers = num_points - inliers;
-  for (size_t i = 0; i < num_points; ++i) {
-    Eigen::Vector4d v;
-    v(0) = dis(gen)*6.0;
-    v(1) = dis(gen)*6.0;
-    v(2) = dis(gen)*2.0;
-    v(3) = 1.0;
-    c1->add(v);
-    // std::cout << "Creating point at (" << v(0) << ", " << v(1) << ", " << v(2) << ")" << std::endl;
-  }
+// void createPolygon(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud) {
+//   cloud.push_back(pcl::PointXYZ(-0.7,  0.7, 0));
+//   cloud.push_back(pcl::PointXYZ( 1.2,  1.3, 0));
+//   cloud.push_back(pcl::PointXYZ( 1.4, -1.1, 0));
+//   cloud.push_back(pcl::PointXYZ(-1.0, -1.0, 0));
+// }
 
-  for (size_t i = 0; i < num_points; ++i) {
-    Eigen::Vector4d v;
+// void addNoise(double noise, pcl::PointCloud<pcl::PointXYZ>::Ptr input, pcl::PointCloud<pcl::PointXYZ>::Ptr& output) {
+//   std::random_device rd;
+//   std::mt19937 gen(rd());
+//   std::uniform_real_distribution<> dis(-1, +1);
+//   for (size_t i = 0; i < input->size(); ++i) {
+//     pcl::PointXYZ p;
+//     p.x = input->points[i].x + dis(gen)*noise;
+//     p.y = input->points[i].y + dis(gen)*noise;
+//     p.z = input->points[i].z + dis(gen)*noise;
+//     output->push_back(p);
+//   }
+// }
 
-    if (i < inliers) {
-      v = c1->at(i);
-      v(0) -= 0.7;
-      // add noise
-      v(0) += dis(gen)*0.2 / (RAND_MAX + 1.0);
-      v(1) += dis(gen)*0.2 / (RAND_MAX + 1.0);
-      v(1) += dis(gen)*0.2 / (RAND_MAX + 1.0);
-    } else {
-      v(0) = dis(gen)*6.0;
-      v(1) = dis(gen)*6.0;
-      v(2) = dis(gen)*2.0;
-      v(3) = 1.0;
-    }
-    c2->add(v);
-    // std::cout << "Creating point at (" << v(0) << ", " << v(1) << ", " << v(2) << ")" << std::endl;
-  }
+Eigen::Matrix4d registerClouds(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud1, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud2) {
+  boost::shared_ptr<terrain_slam::CloudPatch> c1(new terrain_slam::CloudPatch());
+  boost::shared_ptr<terrain_slam::CloudPatch> c2(new terrain_slam::CloudPatch());
+  std::cout << "Adjusting... " << std::endl;
+
+  c1->cloud = cloud1;
+  c2->cloud = cloud2;
+  c1->updateSearchTree();
+
+  // double gt_x = -2.439199;
+  // double gt_y = 2.290323;
+  // double gt_z = 1.433578;
+  // double xx = 0.941450;
+  // double xy = -0.337153;
+  // double yy = 0.941450;
+
+  // c2->transform.T(0, 0) = xx;
+  // c2->transform.T(0, 1) = xy;
+  // c2->transform.T(1, 0) = -xy;
+  // c2->transform.T(1, 1) = yy;
+  // c2->transform.T(0, 3) = gt_x;
+  // c2->transform.T(1, 3) = gt_y;
+  // c2->transform.T(2, 3) = gt_z;
+
+  // pcl::transformPointCloud(*cloud2, *cloud2, c2->transform.T.cast<float>());
+  pcl_tools::saveCloud(cloud1, "orig_test", 1);
+  pcl_tools::saveCloud(cloud2, "orig_test", 2);
+
+  terrain_slam::Adjuster adj;
+  Eigen::Matrix4d relative = adj.adjust(c1, c2);
+
+  // Transform pointcloud and save them for debugging
+  std::cout << "Saving results. " << std::endl;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud2_tf(new pcl::PointCloud<pcl::PointXYZ>());
+  pcl::transformPointCloud(*cloud2, *cloud2_tf, relative.cast<float>());
+  pcl_tools::saveCloud(cloud1, "test", 1);
+  pcl_tools::saveCloud(cloud2_tf, "test", 2);
+  std::cout << "DONE!" << std::endl;
+  return relative;
 }
 
 int main(int argc, char** argv) {
   // Create a fake set of 3D points
-  boost::shared_ptr<terrain_slam::CloudPatch> c1(new terrain_slam::CloudPatch());
-  boost::shared_ptr<terrain_slam::CloudPatch> c2(new terrain_slam::CloudPatch());
-  std::cout << "Filling cloud data... " << std::endl;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud1(new pcl::PointCloud<pcl::PointXYZ>());
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud2(new pcl::PointCloud<pcl::PointXYZ>());
 
-  double overlap = 0;
-  double x = 0;
-  double y = 0;
-  double z = 0;
+  pcl::io::loadPCDFile (argv[1], *cloud1);// Load bun0.pcd -- should be available with the PCL archive in test
+  pcl::io::loadPCDFile (argv[2], *cloud2);
 
-  std::vector<std::vector<double> > output(500000, std::vector<double>(6));
+  std::vector< int > dummy;
+  pcl::removeNaNFromPointCloud(*cloud1, *cloud1, dummy);
+  pcl::removeNaNFromPointCloud(*cloud2, *cloud2, dummy);
 
-  int xM = 10;
-  int iM = 50;
+  registerClouds(cloud1, cloud2);
 
-  std::ofstream myfile("example.csv");
-  if (!myfile.is_open()) {
-    std::cout << "Can't open file " << std::endl;
-    return 0;
-  }
-
-  #pragma omp parallel for collapse(5)
-  for (size_t o = 0; o < xM; o++) {
-    for (size_t xi = 0; xi < xM; xi++) {
-      for (size_t yi = 0; yi < xM; yi++) {
-        for (size_t zi = 0; zi < xM; zi++) {
-          for (size_t i = 0; i < iM; i++) {
-            overlap = static_cast<double>(o)/10.0;
-            x = 0.5*static_cast<double>(xi);
-            y = 0.5*static_cast<double>(yi);
-            z = 0.5*static_cast<double>(zi);
-            boost::shared_ptr<terrain_slam::CloudPatch> c1(new terrain_slam::CloudPatch());
-            boost::shared_ptr<terrain_slam::CloudPatch> c2(new terrain_slam::CloudPatch());
-            fillData(100, overlap, c1, c2);
-            // c1->save(0, std::string("../adjusted/original"), std::string(""));
-            // c2->save(1, std::string("../adjusted/original"), std::string(""));
-            c2->transform(0,3) = x;
-            c2->transform(1,3) = y;
-            c2->transform(2,3) = z;
-            c1->setId(100*i+0);
-            c2->setId(100*i+1);
-            terrain_slam::Adjuster adj;
-            // std::cout << "Adjusting... " << std::endl;
-            Eigen::Matrix4d new_tf = adj.adjust(c1, c2);
-            double dx = std::abs(new_tf(0, 3)) - 0.7;
-            double dy = std::abs(new_tf(1, 3));
-            double dz = std::abs(new_tf(2, 3));
-            double error = sqrt(dx*dx+dy*dy+dz*dz);
-            // std::cout << "Error: " << error << std::endl;
-            myfile << overlap << "," << x << "," << y << "," << z << "," << i << "," << error << "\n";
-          }
-        }
-      }
-    }
-  }
-  myfile.close();
   return 0;
 }
