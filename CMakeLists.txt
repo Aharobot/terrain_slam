@@ -85,7 +85,6 @@ target_link_libraries(graph ${g2o_LIBRARIES})
 add_executable(terrain_slam src/terrain_slam.cpp
                             src/greedy_projector.cpp
                             src/clouds.cpp
-                            src/transform.cpp
                             ${MY_HEADERS})
 
 # Link the executable to CGAL and third-party libraries
