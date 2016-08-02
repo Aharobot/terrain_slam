@@ -399,11 +399,11 @@ bool terrain_slam::TerrainSlam::processCloud(const CloudPatchPtr& c, pcl::PointC
   if (filtered->size() < min_pts_) return false;
 
   double a = area(filtered);
-  std::cout << "Current cloud area: " << a << std::endl;
+  // std::cout << "Current cloud area: " << a << std::endl;
   double point_density = 200.0;
   int num_points = std::min((int)(point_density * a), 100000);
-  std::cout << "Points: " << point_density * a << std::endl;
-  std::cout << "Points: " << num_points << std::endl;
+  // std::cout << "Points: " << point_density * a << std::endl;
+  // std::cout << "Points: " << num_points << std::endl;
 
   // Radomly sampling the cloud
   // std::cout << "Randomly downsampling the cloud... " << std::endl;;
@@ -477,28 +477,27 @@ bool terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
                                               Eigen::Matrix4d& transform) {
   // Adjust
   std::cout << "Adjusting " << id1 << " to " << id2 << "..." << std::endl;
-  // adj_.reset(new BruteForceAdjuster(-7.0, 7.0,  // x
-  //                                   -7.0, 7.0,  // y
-  //                                     0, 0,  // z
-  //                                     0, 0,  // yaw
-  //                                     0.1,       // x-y resolution
-  //                                     0.5,       // z resolution
-  //                                     0.5));    // yaw resolution
+
   CloudPatchPtr c1(c.at(id1));
   CloudPatchPtr c2(c.at(id2));
+
+  // Copy pointclouds
   pcl::PointCloud<pcl::PointXYZ>::Ptr source_orig(new pcl::PointCloud<pcl::PointXYZ>());
   pcl::PointCloud<pcl::PointXYZ>::Ptr target_orig(new pcl::PointCloud<pcl::PointXYZ>());
   source_orig = c1->cloud;
   target_orig = c2->cloud;
 
+  // Prepare transformation
+  Eigen::Matrix4Xd original = c2->transform.T;
+  Eigen::Matrix4Xd relative_pre;
+  Eigen::Matrix4Xd relative_post;
 
+  // TODO check which clouds are more suitable to match
   // // Add prior pointcloud
   // pcl::PointCloud<pcl::PointXYZ>::Ptr next_cloud(new pcl::PointCloud<pcl::PointXYZ>());
   // next_cloud = c.at(id2-1)->cloud;
   // Eigen::Matrix4d tf_relative = c2->transform.T.inverse() * c.at(id2-1)->transform.T;
-
   // pcl::transformPointCloud(*next_cloud, *next_cloud, tf_relative.cast<float>());
-
   // *target_orig += *next_cloud;
 
   // Preprocess clouds (remove outliers, grid and random sample)
@@ -507,6 +506,71 @@ bool terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
   bool res1 = processCloud(c1, source_grid);
   pcl::PointCloud<pcl::PointXYZ>::Ptr target_grid(new pcl::PointCloud<pcl::PointXYZ>());
   bool res2 = processCloud(c2, target_grid);
+
+  if (res1 && res2) {
+
+    // Smooth the clouds
+    pcl::PointCloud<pcl::PointXYZ>::Ptr source_smooth(new pcl::PointCloud<pcl::PointXYZ>());
+    pcl::PointCloud<pcl::PointXYZ>::Ptr target_smooth(new pcl::PointCloud<pcl::PointXYZ>());
+    pcl_tools::smooth2(source_grid, *source_smooth);
+    pcl_tools::smooth2(target_grid, *target_smooth);
+
+    // Copy the smoothed to the patches
+    c1->cloud = source_smooth;
+    c2->cloud = target_smooth;
+
+    // Pre-align
+    c1->updateSearchTree();
+
+    // Register
+    std::cout << "Running pre-adjuster ... " << std::endl;
+    adj_->reset();
+    relative_pre = adj_->adjust(c1, c2);
+    c2->transform.T = c1->transform.T*relative_pre;
+
+    // Save results of this transformation
+    pcl::PointCloud<pcl::PointXYZ>::Ptr target_smooth_tf(new pcl::PointCloud<pcl::PointXYZ>());
+    pcl::transformPointCloud(*target_smooth, *target_smooth_tf, relative_pre.cast<float>());
+    std::ostringstream oss1;
+    oss1 << "pre_" << id1 << "_" << id2;
+    pcl_tools::saveCloud(source_smooth, oss1.str(), id1);
+    pcl_tools::saveCloud(target_smooth_tf, oss1.str(), id2);
+
+
+    // Use the transformation for the original cloud
+    pcl::PointCloud<pcl::PointXYZ>::Ptr target_tf(new pcl::PointCloud<pcl::PointXYZ>());
+    pcl::transformPointCloud(*target_grid, *target_tf, relative_pre.cast<float>());
+
+    // Align
+    // Copy the smoothed to the patches
+    c1->cloud = source_grid;
+    c2->cloud = target_tf;
+
+    // Pre-align
+    c1->updateSearchTree();
+
+    // Register
+    std::cout << "Running adjuster ... " << std::endl;
+    adj_->reset();
+    relative_post = adj_->adjust(c1, c2);
+    c2->transform.T = c1->transform.T*relative_post;
+
+    // Save results of this transformation
+    pcl::transformPointCloud(*target_grid, *target_tf, relative_post.cast<float>());
+    std::ostringstream oss2;
+    oss2 << "post_" << id1 << "_" << id2;
+    pcl_tools::saveCloud(source_smooth, oss2.str(), id1);
+    pcl_tools::saveCloud(target_tf, oss2.str(), id2);
+
+    // Return points at original state and save the transformation
+    c1->cloud = source_orig;
+    c2->cloud = target_orig;
+
+    return true;
+  } else {
+    return false;
+  }
+
 
   // // Pre-align:
   // pcl::PointCloud<pcl::PointXYZ>::Ptr source_segmented(new pcl::PointCloud<pcl::PointXYZ>());
@@ -567,16 +631,10 @@ bool terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
   // }
 
 
-  if (res1 && res2) {
-    // Copy the grids to the patches
-    c1->cloud = source_grid;
-    c2->cloud = target_grid;
+  // if (res1 && res2) {
 
-    //TODO smooth not working
-    pcl::PointCloud<pcl::PointXYZ>::Ptr source_smooth(new pcl::PointCloud<pcl::PointXYZ>());
-    pcl::PointCloud<pcl::PointXYZ>::Ptr target_smooth(new pcl::PointCloud<pcl::PointXYZ>());
-    pcl_tools::smooth2(source_grid, *source_smooth);
-    pcl_tools::smooth2(target_grid, *target_smooth);
+
+
 
     // pcl_tools::saveCloud(source_smooth, "smooth", id1);
     // pcl_tools::saveCloud(target_smooth, "smooth", id2);
@@ -592,12 +650,12 @@ bool terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
     // double ymov = 5.; //gt_y; //
     // double zmov = 1.0; //gt_z; //
     // int count = 0;
-    Eigen::Matrix4Xd original = c2->transform.T;
-    Eigen::Matrix4Xd relative;
+    // Eigen::Matrix4Xd original = c2->transform.T;
+    // Eigen::Matrix4Xd relative;
     // for (int xpos = 1; xpos < 2; xpos++) {
     //   for (int ypos = 1; ypos < 2; ypos++) {
     //     for (int zpos = 1; zpos < 2; zpos++) {
-          std::cout << "Running adjuster ... " << std::endl;
+          // std::cout << "Running adjuster ... " << std::endl;
 
           // c2->transform.T = original;
           // c2->transform.T(0, 3) += xpos*xmov;
@@ -664,24 +722,24 @@ bool terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
 
 
 
-          // Prepare KdTree structure for kNN
-          c1->updateSearchTree();
+          // // Prepare KdTree structure for kNN
+          // c1->updateSearchTree();
 
-          // Register
-          adj_->reset();
-          relative = adj_->adjust(c1, c2);
+          // // Register
+          // adj_->reset();
+          // relative = adj_->adjust(c1, c2);
 
           // // Put the original cloud back
           // c1->cloud = source_grid;
           // c2->cloud = target_grid;
 
-          // Transform pointcloud and save them for debugging
-          pcl::PointCloud<pcl::PointXYZ>::Ptr target_tf(new pcl::PointCloud<pcl::PointXYZ>());
-          pcl::transformPointCloud(*target_grid, *target_tf, relative.cast<float>());
-          std::ostringstream os;
-          os << "tf_" << id1 << "_" << id2;// << "_" << count;
-          pcl_tools::saveCloud(source_grid, os.str(), id1);
-          pcl_tools::saveCloud(target_tf, os.str(), id2);
+          // // Transform pointcloud and save them for debugging
+          // pcl::PointCloud<pcl::PointXYZ>::Ptr target_tf(new pcl::PointCloud<pcl::PointXYZ>());
+          // pcl::transformPointCloud(*target_grid, *target_tf, relative.cast<float>());
+          // std::ostringstream os;
+          // os << "tf_" << id1 << "_" << id2;// << "_" << count;
+          // pcl_tools::saveCloud(source_grid, os.str(), id1);
+          // pcl_tools::saveCloud(target_tf, os.str(), id2);
 
           // count++;
     //     }
@@ -689,13 +747,13 @@ bool terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
     // }
 
     // Return points at original state and save the transformation
-    c1->cloud = source_orig;
-    c2->cloud = target_orig;
-    c2->transform.T = c1->transform.T*relative;
-    return true;
-  } else {
-    return false;
-  }
+    // c1->cloud = source_orig;
+    // c2->cloud = target_orig;
+    // c2->transform.T = c1->transform.T*relative;
+    // return true;
+  // } else {
+    // return false;
+  // }
 }
 
 int main(int argc, char **argv) {

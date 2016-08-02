@@ -489,12 +489,12 @@ static void smooth2(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<p
   mls.setSearchRadius (1.5);
 
   // Reconstruct
-  std::cout << "PROCESS " << std::endl;
+  // std::cout << "PROCESS " << std::endl;
   mls.process (mls_points);
 
-  std::cout << "COPY" << std::endl;
+  // std::cout << "COPY" << std::endl;
   pcl::copyPointCloud(mls_points, output);
-  std::cout << "OUT" << std::endl;
+  // std::cout << "OUT" << std::endl;
 
 }
 
