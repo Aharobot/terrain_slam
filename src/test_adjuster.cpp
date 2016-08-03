@@ -77,8 +77,8 @@ Eigen::Matrix4d registerClouds(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud1, pcl::
   // c2->transform.T(2, 3) = gt_z;
 
   // pcl::transformPointCloud(*cloud2, *cloud2, c2->transform.T.cast<float>());
-  pcl_tools::saveCloud(cloud1, "orig_test", 1);
-  pcl_tools::saveCloud(cloud2, "orig_test", 2);
+  // pcl_tools::saveCloud(cloud1, "orig_test", 1);
+  // pcl_tools::saveCloud(cloud2, "orig_test", 2);
 
   terrain_slam::Adjuster adj;
   Eigen::Matrix4d relative = adj.adjust(c1, c2);

@@ -120,20 +120,17 @@ void terrain_slam::TerrainSlam::process() {
     // findTransform(patches_, 14, 21);
     // findTransform(patches_, 0, 27);
 
-    // Save original clouds
-    std::cout << "Saving original clouds..." << std::endl;
-    #pragma omp parallel for
-    for (size_t i = 0; i < patches_.size(); i++) {
-      Eigen::Isometry3d pose = graph_->getVertexPose(i);
-      CloudPatchPtr c(patches_.at(i));
-      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_tf(new pcl::PointCloud<pcl::PointXYZ>());
-      pcl::transformPointCloud(*c->cloud, *cloud_tf, pose.matrix());
-      pcl_tools::saveCloud(cloud_tf, "global", c->getId());
-      pcl_tools::saveCloud(c->cloud, "local", c->getId());
-      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_tf_smooth(new pcl::PointCloud<pcl::PointXYZ>());
-      pcl_tools::smooth(cloud_tf, *cloud_tf_smooth);
-      pcl_tools::saveCloud(c->cloud, "gs", c->getId());
-    }
+    // // Save original clouds
+    // std::cout << "Saving original clouds..." << std::endl;
+    // #pragma omp parallel for
+    // for (size_t i = 0; i < patches_.size(); i++) {
+    //   Eigen::Isometry3d pose = graph_->getVertexPose(i);
+    //   CloudPatchPtr c(patches_.at(i));
+    //   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_tf(new pcl::PointCloud<pcl::PointXYZ>());
+    //   pcl::transformPointCloud(*c->cloud, *cloud_tf, pose.matrix());
+    //   pcl_tools::saveCloud(cloud_tf, "global", c->getId());
+    //   pcl_tools::saveCloud(c->cloud, "local", c->getId());
+    // }
 
     for (size_t i = 0; i < candidates.size(); i++) {
       int id1 = candidates[i].first;
@@ -309,7 +306,8 @@ terrain_slam::TerrainSlam::createPatches(
       // create new patch
       CloudPatchPtr patch(new CloudPatch);
       patch->setId(patch_idx);
-      patch->transform = lines[pivot_idx]->transform;
+      int middle_line = (i + pivot_idx)/2;
+      patch->transform = lines[middle_line]->transform;
 
       for (size_t p = pivot_idx; p <= i; p++) {
         patch->add(*(lines[p]));
@@ -368,7 +366,7 @@ terrain_slam::TerrainSlam::lookForCandidates(
     cout << "[INFO]: ByDistance " << i << " - ";
     for (size_t j = 0; j < neighbors[i].size(); j++) {
       if (i > neighbors[i][j]) continue;  // if 1 -> 6, 6 -> 1 too.
-      if (distance[j] < 0.75*patch_size_) {
+      if (distance[j] < 1.0*patch_size_) {
         pair<int, int> p = make_pair(i, neighbors[i][j]);
         // Check if the pair already exist
         if (std::find(candidates.begin(),
@@ -427,6 +425,10 @@ bool terrain_slam::TerrainSlam::processCloud(const CloudPatchPtr& c, pcl::PointC
   pcl_tools::removeOutliers(source_grid, min_z, max_z, neighbors_radius, min_neighbors, output);
 
   pcl_tools::saveCloud(output, "outl2", c->getId());
+
+  pcl::PointCloud<pcl::PointXYZ>::Ptr output_smooth(new pcl::PointCloud<pcl::PointXYZ>());
+  pcl_tools::smooth(output, *output_smooth);
+  pcl_tools::saveCloud(output_smooth, "smooth", c->getId());
 
   // std::cout << output->size() << " points." << std::endl;
   return true;
@@ -512,6 +514,25 @@ bool terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
   pcl::PointCloud<pcl::PointXYZ>::Ptr target_grid(new pcl::PointCloud<pcl::PointXYZ>());
   bool res2 = processCloud(c2, target_grid);
 
+  // Do they overlap?
+  std::cout << "Computing overlap... " << std::endl;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr ov_cloud1(new pcl::PointCloud<pcl::PointXYZ>());
+  pcl::PointCloud<pcl::PointXYZ>::Ptr ov_cloud2(new pcl::PointCloud<pcl::PointXYZ>());
+  overlap(c1, c2, ov_cloud2);
+  overlap(c2, c1, ov_cloud1);
+
+  double orig_area_1 = area(c1->cloud);
+  double overlap_area_1 = area(ov_cloud1);
+
+  double orig_area_2 = area(c2->cloud);
+  double overlap_area_2 = area(ov_cloud2);
+
+  std::cout << "Overlap 1: " << overlap_area_1/orig_area_1*100 << "%%" << std::endl;
+  std::cout << "Overlap 2: " << overlap_area_2/orig_area_2*100 << "%%" << std::endl;
+  std::cout << "Size ratio 1/2: " << orig_area_1/orig_area_2 << "%%" << std::endl;
+  std::cout << "Overlap 1 to 2: " << overlap_area_1/orig_area_2*100 << "%%" << std::endl;
+  std::cout << "Overlap 2 to 1: " << overlap_area_2/orig_area_1*100 << "%%" << std::endl;
+
   if (res1 && res2) {
 
     // Smooth the clouds
@@ -523,6 +544,11 @@ bool terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
     // Copy the smoothed to the patches
     c1->cloud = source_smooth;
     c2->cloud = target_smooth;
+
+    // TODO remove
+    c1->cloud = source_orig;
+    c2->cloud = target_orig;
+    return true;
 
     // Pre-align
     c1->updateSearchTree();
