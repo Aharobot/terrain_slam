@@ -77,10 +77,10 @@ terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
   for (size_t i = 0; i < cloud->size(); i++) {
     Eigen::Vector4d point = cloud->at(i);
 
-    AdjusterCostFunctor *hcfunctor =
-        new AdjusterCostFunctor(cloud_fixed, point, roll, pitch);
+    Point2PointAdjusterCostFunctor *hcfunctor =
+        new Point2PointAdjusterCostFunctor(cloud_fixed, point, roll, pitch);
     ceres::CostFunction *cost_function =
-        new ceres::NumericDiffCostFunction<AdjusterCostFunctor, ceres::CENTRAL, 3, 1, 1, 1, 1>(hcfunctor);
+        new ceres::NumericDiffCostFunction<Point2PointAdjusterCostFunctor, ceres::CENTRAL, 3, 1, 1, 1, 1>(hcfunctor);
     problem_->AddResidualBlock(cost_function, NULL, &tx, &ty, &tz, &yaw);
 
     // new ceres::HuberLoss(0.5)
