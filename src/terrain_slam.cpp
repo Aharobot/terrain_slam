@@ -529,7 +529,7 @@ bool terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
 
   std::cout << "Overlap 1: " << overlap_area_1/orig_area_1*100 << "%%" << std::endl;
   std::cout << "Overlap 2: " << overlap_area_2/orig_area_2*100 << "%%" << std::endl;
-  std::cout << "Size ratio 1/2: " << orig_area_1/orig_area_2 << "%%" << std::endl;
+  std::cout << "Size ratio 1/2: " << orig_area_1/orig_area_2*100 << "%%" << std::endl;
   std::cout << "Overlap 1 to 2: " << overlap_area_1/orig_area_2*100 << "%%" << std::endl;
   std::cout << "Overlap 2 to 1: " << overlap_area_2/orig_area_1*100 << "%%" << std::endl;
 
