@@ -20,28 +20,23 @@ endif()
 set(EXTERNAL_LIBS "")
 
 find_package(Eigen3 REQUIRED)
-set(Eigen_INCLUDE_DIR ${Eigen3_INCLUDE_DIRS})
 find_package(Ceres REQUIRED)
+find_package(SuiteSparse REQUIRED)
+find_package(PCL REQUIRED)
+find_package(Boost REQUIRED COMPONENTS program_options filesystem thread system graph)
 find_package(OpenCV REQUIRED)
 find_package(OpenMP)
+find_package(CGAL)
 find_package(G2O REQUIRED)
-find_package(SuiteSparse REQUIRED)
-find_package(Cholmod REQUIRED)
-find_package(PCL REQUIRED)
-
 if (OPENMP_FOUND)
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
     message("-- OpenMP found, version ${OpenMP_VERSION}")
 endif()
 
-# include helper file
-find_package(CGAL)
-include( ${CGAL_USE_FILE} )
-
-find_package(Boost REQUIRED COMPONENTS program_options filesystem thread system graph)
+set(Eigen_INCLUDE_DIR ${Eigen3_INCLUDE_DIRS})
 set(Boost_USE_MULTITHREADED ON)
-
+include( ${CGAL_USE_FILE} )
 include_directories(include
                     ${OpenCV_INCLUDE_DIRS}
                     ${Boost_INCLUDE_DIRS}

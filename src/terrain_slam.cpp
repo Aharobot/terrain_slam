@@ -120,16 +120,20 @@ void terrain_slam::TerrainSlam::process() {
     // findTransform(patches_, 14, 21);
     // findTransform(patches_, 0, 27);
 
-    // // Save original clouds
-    // std::cout << "Saving original clouds..." << std::endl;
-    // for (size_t i = 0; i < patches_.size(); i++) {
-    //   Eigen::Isometry3d pose = graph_->getVertexPose(i);
-    //   CloudPatchPtr c(patches_.at(i));
-    //   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_tf(new pcl::PointCloud<pcl::PointXYZ>());
-    //   pcl::transformPointCloud(*c->cloud, *cloud_tf, pose.matrix());
-    //   pcl_tools::saveCloud(cloud_tf, "global", c->getId());
-    //   pcl_tools::saveCloud(c->cloud, "local", c->getId());
-    // }
+    // Save original clouds
+    std::cout << "Saving original clouds..." << std::endl;
+    #pragma omp parallel for
+    for (size_t i = 0; i < patches_.size(); i++) {
+      Eigen::Isometry3d pose = graph_->getVertexPose(i);
+      CloudPatchPtr c(patches_.at(i));
+      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_tf(new pcl::PointCloud<pcl::PointXYZ>());
+      pcl::transformPointCloud(*c->cloud, *cloud_tf, pose.matrix());
+      pcl_tools::saveCloud(cloud_tf, "global", c->getId());
+      pcl_tools::saveCloud(c->cloud, "local", c->getId());
+      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_tf_smooth(new pcl::PointCloud<pcl::PointXYZ>());
+      pcl_tools::smooth(cloud_tf, *cloud_tf_smooth);
+      pcl_tools::saveCloud(c->cloud, "gs", c->getId());
+    }
 
     for (size_t i = 0; i < candidates.size(); i++) {
       int id1 = candidates[i].first;
@@ -151,6 +155,7 @@ void terrain_slam::TerrainSlam::process() {
     // graph_->saveGraph();
 
     // save optimized clouds
+    #pragma omp parallel for
     for (size_t i = 0; i < patches_.size(); i++) {
       Eigen::Isometry3d pose = graph_->getVertexPose(i);
       CloudPatchPtr c(patches_.at(i));
