@@ -1,3 +1,6 @@
+#ifndef GREEDY_PROJECTOR_H
+#define GREEDY_PROJECTOR_H
+
 #include <pcl/point_types.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/io/vtk_lib_io.h>
@@ -31,11 +34,13 @@ class GreedyProjector {
   GreedyProjector();
   GreedyProjector(double av);
   void setInputCloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud);
-  std::vector<pcl::PointXYZ> locate(const pcl::PointXYZ& pt);
-  std::vector<pcl::PointXYZ> locate(const pcl::PointXY& pt);
+  std::vector<pcl::PointXYZ> locate(const pcl::PointXYZ& pt) const;
+  std::vector<pcl::PointXYZ> locate(const pcl::PointXY& pt) const;
+  std::vector<Eigen::Vector4d> locate(const Eigen::Vector4d& pt) const;
   void save(void);
-  bool isInside(const pcl::PointXYZ& pt);
-  bool isInside(const pcl::PointXY& pt);
+  bool isInside(const pcl::PointXYZ& pt) const;
+  bool isInside(const pcl::PointXY& pt) const;
+  bool isInside(const Eigen::Vector4d& pt) const;
   double area();
 
  private:
@@ -44,3 +49,5 @@ class GreedyProjector {
   boost::shared_ptr<Alpha_shape_2> alpha_;
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_;
 };
+
+#endif // GREEDY_PROJECTOR_H

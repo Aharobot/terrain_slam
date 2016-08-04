@@ -20,6 +20,7 @@
 //  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 //  DEALINGS IN THE SOFTWARE.
 
+#include <terrain_slam/adjuster_xy.h>
 #include <terrain_slam/adjuster.h>
 #include <terrain_slam/clouds.h>
 #include <terrain_slam/pcl_tools.h>
@@ -57,10 +58,6 @@ Eigen::Matrix4d registerClouds(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud1, pcl::
   boost::shared_ptr<terrain_slam::CloudPatch> c2(new terrain_slam::CloudPatch());
   std::cout << "Adjusting... " << std::endl;
 
-  c1->cloud = cloud1;
-  c2->cloud = cloud2;
-  c1->updateSearchTree();
-
   // double gt_x = -2.439199;
   // double gt_y = 2.290323;
   // double gt_z = 1.433578;
@@ -80,8 +77,34 @@ Eigen::Matrix4d registerClouds(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud1, pcl::
   // pcl_tools::saveCloud(cloud1, "orig_test", 1);
   // pcl_tools::saveCloud(cloud2, "orig_test", 2);
 
+  // Eigen::Vector4f source_centroid, target_centroid;
+  // pcl::compute3DCentroid(*cloud1, source_centroid);
+  // pcl::compute3DCentroid(*cloud2, target_centroid);
+  // Eigen::Matrix4f source_pre_tf = Eigen::Matrix4f::Identity();
+  // Eigen::Matrix4f target_pre_tf = Eigen::Matrix4f::Identity();
+  // Eigen::Vector4f translation = source_centroid - target_centroid;
+  // source_pre_tf(0,3) = -source_centroid(0);
+  // source_pre_tf(1,3) = -source_centroid(1);
+  // source_pre_tf(2,3) = -source_centroid(2);
+  // target_pre_tf(0,3) = -target_centroid(0);
+  // target_pre_tf(1,3) = -target_centroid(1);
+  // target_pre_tf(2,3) = -target_centroid(2);
+  // pcl::transformPointCloud(*cloud1, *cloud1, source_pre_tf);
+  // pcl::transformPointCloud(*cloud2, *cloud2, target_pre_tf);
+
+  pcl_tools::saveCloud(cloud1, "test_tf", 1);
+  pcl_tools::saveCloud(cloud2, "test_tf", 2);
+
+  bool bounded = false;
+  bool high_precision = true;
+
+  c1->cloud = cloud1;
+  c2->cloud = cloud2;
+  c1->updateSearchTree();
+  c2->updateSearchTree();
+
   terrain_slam::Adjuster adj;
-  Eigen::Matrix4d relative = adj.adjust(c1, c2);
+  Eigen::Matrix4d relative = adj.adjust(c1, c2, bounded, high_precision);
 
   // Transform pointcloud and save them for debugging
   std::cout << "Saving results. " << std::endl;

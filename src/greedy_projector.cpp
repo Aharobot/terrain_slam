@@ -28,7 +28,7 @@ void GreedyProjector::setInputCloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr& c
   init_ = true;
 }
 
-std::vector<pcl::PointXYZ> GreedyProjector::locate(const pcl::PointXYZ& pt) {
+std::vector<pcl::PointXYZ> GreedyProjector::locate(const pcl::PointXYZ& pt) const {
   pcl::PointXY ptxy;
   ptxy.x = pt.x;
   ptxy.y = pt.y;
@@ -42,7 +42,7 @@ std::vector<pcl::PointXYZ> GreedyProjector::locate(const pcl::PointXYZ& pt) {
  *
  * @return     Vector of surrounding points
  */
-std::vector<pcl::PointXYZ> GreedyProjector::locate(const pcl::PointXY& pt) {
+std::vector<pcl::PointXYZ> GreedyProjector::locate(const pcl::PointXY& pt) const {
   std::vector<pcl::PointXYZ> output;
   if (!init_) {
     std::cout << "[GreedyProjector] Set input cloud first!" << std::endl;
@@ -96,6 +96,19 @@ std::vector<pcl::PointXYZ> GreedyProjector::locate(const pcl::PointXY& pt) {
   return output;
 }
 
+std::vector<Eigen::Vector4d> GreedyProjector::locate(const Eigen::Vector4d& pt) const {
+  pcl::PointXY pt2;
+  pt2.x = pt(0);
+  pt2.y = pt(1);
+  std::vector<pcl::PointXYZ> pts = locate(pt2);
+  std::vector<Eigen::Vector4d> out;
+  for (size_t i = 0; i < pts.size(); i++) {
+    Eigen::Vector4d pte(pts[i].x, pts[i].y, pts[i].z, 1.0);
+    out.push_back(pte);
+  }
+  return out;
+}
+
 /**
  * @brief      Determines if inside.
  *
@@ -103,10 +116,17 @@ std::vector<pcl::PointXYZ> GreedyProjector::locate(const pcl::PointXY& pt) {
  *
  * @return     True if inside, False otherwise.
  */
-bool GreedyProjector::isInside(const pcl::PointXYZ& pt) {
+bool GreedyProjector::isInside(const pcl::PointXYZ& pt) const {
   pcl::PointXY pt2;
   pt2.x = pt.x;
   pt2.y = pt.y;
+  return isInside(pt2);
+}
+
+bool GreedyProjector::isInside(const Eigen::Vector4d& pt) const {
+  pcl::PointXY pt2;
+  pt2.x = pt(0);
+  pt2.y = pt(1);
   return isInside(pt2);
 }
 
@@ -126,7 +146,7 @@ double GreedyProjector::area() {
  *
  * @return     True if inside, False otherwise.
  */
-bool GreedyProjector::isInside(const pcl::PointXY& pt) {
+bool GreedyProjector::isInside(const pcl::PointXY& pt) const {
   if (!init_) {
     std::cout << "[GreedyProjector] Set input cloud first!" << std::endl;
     return false;

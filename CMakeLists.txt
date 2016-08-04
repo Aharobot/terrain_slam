@@ -71,14 +71,16 @@ set(g2o_LIBRARIES
 # Workaround for MSCV - show includes in project
 FILE(GLOB_RECURSE MY_HEADERS include/*.h)
 
-add_library(adjuster src/adjuster.cpp)
-target_link_libraries(adjuster ${CERES_LIBRARIES})
-
 add_library(graph src/graph.cpp)
 target_link_libraries(graph ${g2o_LIBRARIES})
 
+add_library(greedy_projector src/greedy_projector.cpp)
+target_link_libraries(graph ${PCL_LIBRARIES})
+
+add_library(adjuster src/adjuster.cpp)
+target_link_libraries(adjuster greedy_projector ${CERES_LIBRARIES})
+
 add_executable(terrain_slam src/terrain_slam.cpp
-                            src/greedy_projector.cpp
                             src/clouds.cpp
                             ${MY_HEADERS})
 

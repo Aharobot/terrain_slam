@@ -57,7 +57,9 @@ void terrain_slam::Adjuster::reset() {
 
 Eigen::Matrix4d
 terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
-                               const boost::shared_ptr<CloudPatch> &cloud) {
+                               const boost::shared_ptr<CloudPatch> &cloud,
+                               bool bounded,
+                               bool high_precision) {
   boost::mutex::scoped_lock lock(mutex_adjuster_);
 
   // Iterating for each point
@@ -77,24 +79,26 @@ terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
   for (size_t i = 0; i < cloud->size(); i++) {
     Eigen::Vector4d point = cloud->at(i);
 
-    Point2PointAdjusterCostFunctor *hcfunctor =
-        new Point2PointAdjusterCostFunctor(cloud_fixed, point, roll, pitch);
+    AdjusterCostFunctor *hcfunctor =
+        new AdjusterCostFunctor(cloud_fixed, point, roll, pitch);
     ceres::CostFunction *cost_function =
-        new ceres::NumericDiffCostFunction<Point2PointAdjusterCostFunctor, ceres::CENTRAL, 3, 1, 1, 1, 1>(hcfunctor);
+        new ceres::NumericDiffCostFunction<AdjusterCostFunctor, ceres::CENTRAL, 3, 1, 1, 1, 1>(hcfunctor);
     problem_->AddResidualBlock(cost_function, NULL, &tx, &ty, &tz, &yaw);
 
     // new ceres::HuberLoss(0.5)
   }
 
   // Add constrains
-  problem_->SetParameterLowerBound(&tx, 0, tx - 5.0);
-  problem_->SetParameterUpperBound(&tx, 0, tx + 5.0);
-  problem_->SetParameterLowerBound(&ty, 0, ty - 5.0);
-  problem_->SetParameterUpperBound(&ty, 0, ty + 5.0);
-  problem_->SetParameterLowerBound(&tz, 0, tz - 0.5);
-  problem_->SetParameterUpperBound(&tz, 0, tz + 0.5);
-  problem_->SetParameterLowerBound(&yaw, 0, yaw - 0.2);
-  problem_->SetParameterUpperBound(&yaw, 0, yaw + 0.2);
+  if (bounded) {
+    problem_->SetParameterLowerBound(&tx, 0, tx - 5.0);
+    problem_->SetParameterUpperBound(&tx, 0, tx + 5.0);
+    problem_->SetParameterLowerBound(&ty, 0, ty - 5.0);
+    problem_->SetParameterUpperBound(&ty, 0, ty + 5.0);
+    problem_->SetParameterLowerBound(&tz, 0, tz - 0.5);
+    problem_->SetParameterUpperBound(&tz, 0, tz + 0.5);
+    problem_->SetParameterLowerBound(&yaw, 0, yaw - 0.2);
+    problem_->SetParameterUpperBound(&yaw, 0, yaw + 0.2);
+  }
 
   // Performing the optimization
   ceres::Solver::Options solver_options;
@@ -111,11 +115,17 @@ terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
   solver_options.initial_trust_region_radius = solver_options.max_trust_region_radius; // 4.0;
   solver_options.max_solver_time_in_seconds = 600;
 
-  solver_options.parameter_tolerance = 1e-14;
-  solver_options.function_tolerance  = 1e-14;  // default 1e-6
-  solver_options.gradient_tolerance  = 1e-8;
-  solver_options.minimizer_progress_to_stdout = true;
+  if (high_precision) {
+    solver_options.parameter_tolerance = 1e-14;
+    solver_options.function_tolerance  = 1e-14;  // default 1e-6
+    solver_options.gradient_tolerance  = 1e-14;
+  } else {
+    solver_options.parameter_tolerance = 1e-8;
+    solver_options.function_tolerance  = 1e-8;  // default 1e-6
+    solver_options.gradient_tolerance  = 1e-8;
+  }
 
+  solver_options.minimizer_progress_to_stdout = true;
   solver_options.use_nonmonotonic_steps = true;
 
   ceres::Solver::Summary sum;

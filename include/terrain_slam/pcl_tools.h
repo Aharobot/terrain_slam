@@ -486,7 +486,7 @@ static void smooth(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<pc
   mls.setInputCloud (cloud);
   mls.setPolynomialFit (true);
   mls.setSearchMethod (tree);
-  mls.setSearchRadius (1.5);
+  mls.setSearchRadius (2.5);
 
   // Reconstruct
   // std::cout << "PROCESS " << std::endl;
