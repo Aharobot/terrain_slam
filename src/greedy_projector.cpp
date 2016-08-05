@@ -130,7 +130,7 @@ bool GreedyProjector::isInside(const Eigen::Vector4d& pt) const {
   return isInside(pt2);
 }
 
-double GreedyProjector::area() {
+double GreedyProjector::area() const {
   double acc = 0;
   for (Finite_faces_iterator it = alpha_->finite_faces_begin(); it != alpha_->finite_faces_end(); it++) {
     Alpha_shape_2::Face_handle face = it;
@@ -169,7 +169,7 @@ bool GreedyProjector::isInside(const pcl::PointXY& pt) const {
   return false;
 }
 
-void GreedyProjector::save(void) {
+void GreedyProjector::save(void) const {
   std::cout << "Writting points to ply...   "  << std::endl;
   std::stringstream interior;
   std::stringstream exterior;

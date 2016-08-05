@@ -115,11 +115,11 @@ private:
 class AdjusterCostFunctor {
 public:
   AdjusterCostFunctor(const boost::shared_ptr<CloudPatch> &c,
+                      const boost::shared_ptr<GreedyProjector> &proj,
                       const Eigen::Vector4d &pt,
                       const double& r, const double& p)
-      : c_(c), p_(pt), proj_(0.02), roll(r), pitch(p){
+      : c_(c), p_(pt), proj_(proj), roll(r), pitch(p){
     // empty
-    proj_.setInputCloud(c->cloud);
     c_->updateSearchTree();
   }
 
@@ -154,11 +154,11 @@ public:
     //std::vector<Eigen::Vector4d> nn = c_->kNN2d(pt, 3);
 
     // Find three closest points in cloud
-    bool inside = proj_.isInside(pt);
+    bool inside = proj_->isInside(pt);
     std::vector<Eigen::Vector4d> vertexes;
     double dz = -1;
     if (inside) {
-      vertexes = proj_.locate(pt);
+      vertexes = proj_->locate(pt);
       if (vertexes.size() == 3) {
         // Interpolate z inside the triangle
         Eigen::Vector4d p1(vertexes.at(0));
@@ -218,7 +218,7 @@ public:
 protected:
   boost::shared_ptr<CloudPatch> c_;
   Eigen::Vector4d p_;
-  GreedyProjector proj_;
+  boost::shared_ptr<GreedyProjector> proj_;
   double roll;
   double pitch;
 };  // class

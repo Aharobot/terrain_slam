@@ -100,8 +100,6 @@ Eigen::Matrix4d registerClouds(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud1, pcl::
 
   c1->cloud = cloud1;
   c2->cloud = cloud2;
-  c1->updateSearchTree();
-  c2->updateSearchTree();
 
   terrain_slam::Adjuster adj;
   Eigen::Matrix4d relative = adj.adjust(c1, c2, bounded, high_precision);
@@ -128,7 +126,14 @@ int main(int argc, char** argv) {
   pcl::removeNaNFromPointCloud(*cloud1, *cloud1, dummy);
   pcl::removeNaNFromPointCloud(*cloud2, *cloud2, dummy);
 
-  registerClouds(cloud1, cloud2);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud1_grid(new pcl::PointCloud<pcl::PointXYZ>());
+  double radius_search = 0.25;
+  pcl_tools::randomlySampleGP(cloud1, 5000, radius_search, cloud1_grid);
+
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud2_grid(new pcl::PointCloud<pcl::PointXYZ>());
+  pcl_tools::randomlySampleGP(cloud2, 5000, radius_search, cloud2_grid);
+
+  registerClouds(cloud1_grid, cloud2_grid);
 
   return 0;
 }

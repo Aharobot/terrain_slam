@@ -75,12 +75,13 @@ terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
 
   // std::cout << "T " << cloud->T << std::endl;
   // std::cout << "Parameter block: " << tx << ", " << ty << ", " << tz << ", " << roll << ", " << pitch << ", " << yaw << ", " << std::endl;
-
+  boost::shared_ptr<GreedyProjector> gp(new GreedyProjector(0.02));
+  gp->setInputCloud(cloud_fixed->cloud);
   for (size_t i = 0; i < cloud->size(); i++) {
     Eigen::Vector4d point = cloud->at(i);
 
     AdjusterCostFunctor *hcfunctor =
-        new AdjusterCostFunctor(cloud_fixed, point, roll, pitch);
+        new AdjusterCostFunctor(cloud_fixed, gp, point, roll, pitch);
     ceres::CostFunction *cost_function =
         new ceres::NumericDiffCostFunction<AdjusterCostFunctor, ceres::CENTRAL, 3, 1, 1, 1, 1>(hcfunctor);
     problem_->AddResidualBlock(cost_function, NULL, &tx, &ty, &tz, &yaw);
@@ -116,9 +117,9 @@ terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
   solver_options.max_solver_time_in_seconds = 600;
 
   if (high_precision) {
-    solver_options.parameter_tolerance = 1e-14;
-    solver_options.function_tolerance  = 1e-14;  // default 1e-6
-    solver_options.gradient_tolerance  = 1e-14;
+    solver_options.parameter_tolerance = 1e-12;
+    solver_options.function_tolerance  = 1e-12;  // default 1e-6
+    solver_options.gradient_tolerance  = 1e-8;
   } else {
     solver_options.parameter_tolerance = 1e-8;
     solver_options.function_tolerance  = 1e-8;  // default 1e-6

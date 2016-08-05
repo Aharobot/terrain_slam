@@ -553,9 +553,6 @@ bool terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
     c2->cloud = target_orig;
     return true;
 
-    // Pre-align
-    c1->updateSearchTree();
-
     // Register
     std::cout << "Running pre-adjuster ... " << std::endl;
     adj_->reset();

@@ -37,11 +37,11 @@ class GreedyProjector {
   std::vector<pcl::PointXYZ> locate(const pcl::PointXYZ& pt) const;
   std::vector<pcl::PointXYZ> locate(const pcl::PointXY& pt) const;
   std::vector<Eigen::Vector4d> locate(const Eigen::Vector4d& pt) const;
-  void save(void);
+  void save(void) const;
   bool isInside(const pcl::PointXYZ& pt) const;
   bool isInside(const pcl::PointXY& pt) const;
   bool isInside(const Eigen::Vector4d& pt) const;
-  double area();
+  double area() const;
 
  private:
   bool init_;
