@@ -34,8 +34,8 @@
 
 void fillData(int num_points, double overlap, boost::shared_ptr<terrain_slam::CloudPatch>& c1, boost::shared_ptr<terrain_slam::CloudPatch>& c2) {
   std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_real_distribution<> dis(-1, +1);
+  boost::random::mt19937 gen(rd());
+  boost::random::uniform_real_distribution<> dis(-1, +1);
   int inliers = num_points*overlap;
   // std::cout << "Generating " << inliers << " inliers out of " << num_points << std::endl;
   int outliers = num_points - inliers;
