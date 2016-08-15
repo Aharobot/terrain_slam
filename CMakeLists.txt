@@ -22,6 +22,7 @@ set(EXTERNAL_LIBS "")
 find_package(Eigen3 REQUIRED)
 find_package(Ceres REQUIRED)
 find_package(SuiteSparse REQUIRED)
+find_package(Cholmod REQUIRED)
 find_package(PCL REQUIRED)
 find_package(Boost REQUIRED COMPONENTS program_options filesystem thread system graph)
 find_package(OpenCV REQUIRED)
@@ -72,7 +73,7 @@ set(g2o_LIBRARIES
 FILE(GLOB_RECURSE MY_HEADERS include/*.h)
 
 add_library(graph src/graph.cpp)
-target_link_libraries(graph ${g2o_LIBRARIES})
+target_link_libraries(graph ${g2o_LIBRARIES} cholmod)
 
 add_library(greedy_projector src/greedy_projector.cpp)
 target_link_libraries(graph ${PCL_LIBRARIES})

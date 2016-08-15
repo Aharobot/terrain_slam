@@ -2,6 +2,8 @@
 #include <terrain_slam/clouds.h>
 
 #include <pcl/common/transforms.h>
+#include <pcl/sample_consensus/sac_model_line.h>
+#include <pcl/sample_consensus/ransac.h>
 
 void terrain_slam::CloudPatch::add(const CloudPatch& other_patch) {
   Eigen::Matrix4d tf_other = other_patch.transform();
@@ -66,4 +68,57 @@ terrain_slam::CloudPatch::kNN(const Eigen::Vector4d& p, int n) const {
     points.push_back(Eigen::Vector4d(pt.x, pt.y, pt.z, 1.0));
   }
   return points;
+}
+
+void terrain_slam::CloudPatch::fitLine(double &stddev) const {
+  // Create a shared line model pointer directly
+  pcl::SampleConsensusModelLine<pcl::PointXYZ>::Ptr model(new pcl::SampleConsensusModelLine<pcl::PointXYZ>(cloud));
+
+  // Create the RANSAC object
+  pcl::RandomSampleConsensus<pcl::PointXYZ> sac(model, 0.001);
+
+  // Algorithm tests
+  bool result = sac.computeModel();
+
+  std::vector<int> sample;
+  sac.getModel(sample);
+
+  std::vector<int> inliers;
+  sac.getInliers(inliers);
+
+  Eigen::VectorXf coeff;
+  sac.getModelCoefficients(coeff);
+
+  Eigen::VectorXf coeff_refined;
+  model->optimizeModelCoefficients(inliers, coeff, coeff_refined);
+
+  std::vector<double> sq_dist;
+  model->getDistancesToModel(coeff_refined, sq_dist);
+
+  double mean;
+  std::vector<float> sq_dist_f(sq_dist.begin(), sq_dist.end());
+  pcl::getMeanStd(sq_dist_f, mean, stddev);
+
+  // // Create the filtering object
+  // pcl::ExtractIndices<pcl::PointXYZ> extract;
+  // // Extract the inliers
+  // extract.setInputCloud (cloud);
+  // extract.setIndices (inliers);
+  // extract.setNegative (false);
+  // extract.filter (*inliers_cloud);
+}
+
+void terrain_slam::CloudPatch::getMeanStd(double &mean, double &stddev) const {
+  std::vector<float> z_values2;
+  for(size_t i=0; i<cloud->points.size(); i++) {
+    z_values2.push_back(cloud->points[i].z);
+  }
+  pcl::getMeanStd(z_values2, mean, stddev);
+  std::vector<float> z_values;
+  for(size_t i=0; i<z_values2.size(); i++) {
+    if ( (z_values2[i] - mean) < 3*stddev)
+      z_values.push_back(z_values2[i]);
+  }
+  pcl::getMeanStd(z_values, mean, stddev);
+  // printf("z mean: %03.3f, stddev: %03.3f\n", mean, stddev);
 }

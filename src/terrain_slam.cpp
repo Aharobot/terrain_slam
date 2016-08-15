@@ -120,20 +120,20 @@ void terrain_slam::TerrainSlam::process() {
     // findTransform(patches_, 14, 21);
     // findTransform(patches_, 0, 27);
 
-    // Save original clouds
-    std::cout << "Saving original clouds..." << std::endl;
-    #pragma omp parallel for
-    for (size_t i = 0; i < patches_.size(); i++) {
-      Eigen::Isometry3d pose = graph_->getVertexPose(i);
-      CloudPatchPtr c(patches_.at(i));
-      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_tf(new pcl::PointCloud<pcl::PointXYZ>());
-      pcl::transformPointCloud(*c->cloud, *cloud_tf, pose.matrix());
-      pcl_tools::saveCloud(cloud_tf, "global", c->getId());
-      pcl_tools::saveCloud(c->cloud, "local", c->getId());
+    // // Save original clouds
+    // std::cout << "Saving original clouds..." << std::endl;
+    // #pragma omp parallel for
+    // for (size_t i = 0; i < patches_.size(); i++) {
+    //   Eigen::Isometry3d pose = graph_->getVertexPose(i);
+    //   CloudPatchPtr c(patches_.at(i));
+    //   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_tf(new pcl::PointCloud<pcl::PointXYZ>());
+    //   pcl::transformPointCloud(*c->cloud, *cloud_tf, pose.matrix());
+    //   pcl_tools::saveCloud(cloud_tf, "global", c->getId());
+    //   pcl_tools::saveCloud(c->cloud, "local", c->getId());
 
-      pcl::PointCloud<pcl::PointXYZ>::Ptr dummy(new pcl::PointCloud<pcl::PointXYZ>());
-      bool res = processCloud(c, dummy);
-    }
+    //   pcl::PointCloud<pcl::PointXYZ>::Ptr dummy(new pcl::PointCloud<pcl::PointXYZ>());
+    //   bool res = processCloud(c, dummy);
+    // }
 
     for (size_t i = 0; i < candidates.size(); i++) {
       int id1 = candidates[i].first;
@@ -305,7 +305,16 @@ terrain_slam::TerrainSlam::createPatches(
       centroid_distance = centroid_diff.norm();
     }
 
-    if (robot_distance > patch_size_ || centroid_distance > patch_size_ || i == lines.size() - 1 || jump) {
+    bool close_patch = robot_distance > patch_size_;
+    close_patch = close_patch || centroid_distance > patch_size_;
+    close_patch = close_patch || i == lines.size() - 1;
+    close_patch = close_patch || jump;
+
+    double mean, stdev;
+    lines[i]->fitLine(stdev);
+    std::cout << stdev << " " << close_patch << std::endl;
+
+    if (close_patch) {
       // create new patch
       CloudPatchPtr patch(new CloudPatch);
       patch->setId(patch_idx);
@@ -385,56 +394,64 @@ terrain_slam::TerrainSlam::lookForCandidates(
 }
 
 bool terrain_slam::TerrainSlam::processCloud(const CloudPatchPtr& c, pcl::PointCloud<pcl::PointXYZ>::Ptr& output) {
-  // Convert cloud to PCL
-  // std::cout << "Converting cloud to PCL..." << std::endl;
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(c->cloud);
+  if (c->processed) {
+    output = c->cloud2;
+    return true;
+  } else {
 
-  if (cloud->size() < min_pts_) return false;
+    // Convert cloud to PCL
+    // std::cout << "Converting cloud to PCL..." << std::endl;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(c->cloud);
 
-  // Remove outliers
-  // std::cout << "Removing outliers 1/2..." << std::endl;
-  pcl::PointCloud<pcl::PointXYZ>::Ptr filtered(new pcl::PointCloud<pcl::PointXYZ>());
-  double min_z = 1.5;   // m
-  double max_z = 25.0;  // m
-  double neighbors_radius = 0.1;  // m
-  int min_neighbors = 10;
-  pcl_tools::removeOutliers(cloud, min_z, max_z, neighbors_radius, min_neighbors, filtered);
+    if (cloud->size() < min_pts_) return false;
 
-  pcl_tools::saveCloud(filtered, "outl1", c->getId());
+    // Remove outliers
+    // std::cout << "Removing outliers 1/2..." << std::endl;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr filtered(new pcl::PointCloud<pcl::PointXYZ>());
+    double min_z = 1.5;   // m
+    double max_z = 25.0;  // m
+    double neighbors_radius = 0.1;  // m
+    int min_neighbors = 10;
+    pcl_tools::removeOutliers(cloud, min_z, max_z, neighbors_radius, min_neighbors, filtered);
 
-  if (filtered->size() < min_pts_) return false;
+    pcl_tools::saveCloud(filtered, "outl1", c->getId());
 
-  double a = area(filtered);
-  // std::cout << "Current cloud area: " << a << std::endl;
-  double point_density = 200.0;
-  int num_points = std::min((int)(point_density * a), 100000);
-  // std::cout << "Points: " << point_density * a << std::endl;
-  // std::cout << "Points: " << num_points << std::endl;
+    if (filtered->size() < min_pts_) return false;
 
-  // Radomly sampling the cloud
-  // std::cout << "Randomly downsampling the cloud... " << std::endl;;
-  pcl::PointCloud<pcl::PointXYZ>::Ptr source_grid(new pcl::PointCloud<pcl::PointXYZ>());
-  double radius_search = 0.25;
-  pcl_tools::randomlySampleGP(filtered, num_points, radius_search, source_grid);
-  if (source_grid->points.size() < num_points) {
-    pcl_tools::voxelGrid(filtered, 0.1, source_grid);
+    double a = area(filtered);
+    // std::cout << "Current cloud area: " << a << std::endl;
+    double point_density = 200.0;
+    int num_points = std::min((int)(point_density * a), 100000);
+    // std::cout << "Points: " << point_density * a << std::endl;
+    // std::cout << "Points: " << num_points << std::endl;
+
+    // Radomly sampling the cloud
+    // std::cout << "Randomly downsampling the cloud... " << std::endl;;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr source_grid(new pcl::PointCloud<pcl::PointXYZ>());
+    double radius_search = 0.25;
+    pcl_tools::randomlySampleGP(filtered, num_points, radius_search, source_grid);
+    if (source_grid->points.size() < num_points) {
+      pcl_tools::voxelGrid(filtered, 0.1, source_grid);
+    }
+
+    pcl_tools::saveCloud(source_grid, "rand", c->getId());
+
+    // std::cout << "Removing outliers 2/2..." << std::endl;
+    neighbors_radius = 0.25;  // m
+    min_neighbors = 2;
+    pcl_tools::removeOutliers(source_grid, min_z, max_z, neighbors_radius, min_neighbors, output);
+
+    pcl_tools::saveCloud(output, "outl2", c->getId());
+
+    pcl::PointCloud<pcl::PointXYZ>::Ptr output_smooth(new pcl::PointCloud<pcl::PointXYZ>());
+    pcl_tools::smooth(output, *output_smooth);
+    pcl_tools::saveCloud(output_smooth, "smooth", c->getId());
+
+    // std::cout << output->size() << " points." << std::endl;
+    pcl::copyPointCloud(*output, *(c->cloud2));
+    c->processed = true;
+    return true;
   }
-
-  pcl_tools::saveCloud(source_grid, "rand", c->getId());
-
-  // std::cout << "Removing outliers 2/2..." << std::endl;
-  neighbors_radius = 0.25;  // m
-  min_neighbors = 2;
-  pcl_tools::removeOutliers(source_grid, min_z, max_z, neighbors_radius, min_neighbors, output);
-
-  pcl_tools::saveCloud(output, "outl2", c->getId());
-
-  pcl::PointCloud<pcl::PointXYZ>::Ptr output_smooth(new pcl::PointCloud<pcl::PointXYZ>());
-  pcl_tools::smooth(output, *output_smooth);
-  pcl_tools::saveCloud(output_smooth, "smooth", c->getId());
-
-  // std::cout << output->size() << " points." << std::endl;
-  return true;
 }
 
 void terrain_slam::TerrainSlam::overlap(CloudPatchConstPtr c1,
@@ -548,10 +565,10 @@ bool terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
     c1->cloud = source_smooth;
     c2->cloud = target_smooth;
 
-    // TODO remove
-    c1->cloud = source_orig;
-    c2->cloud = target_orig;
-    return true;
+    // // TODO remove
+    // c1->cloud = source_orig;
+    // c2->cloud = target_orig;
+    // return true;
 
     // Register
     std::cout << "Running pre-adjuster ... " << std::endl;
@@ -576,9 +593,6 @@ bool terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
     // Copy the smoothed to the patches
     c1->cloud = source_grid;
     c2->cloud = target_tf;
-
-    // Pre-align
-    c1->updateSearchTree();
 
     // Register
     std::cout << "Running adjuster ... " << std::endl;
