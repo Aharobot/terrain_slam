@@ -122,12 +122,14 @@ class CloudPatch: public Vertex {
   typedef pcl::PointCloud<PointNormal>  CloudPointNormal;
 
   Cloud::Ptr cloud;
+  Cloud::Ptr cloud2;
   pcl::PointCloud<pcl::PointXY>::Ptr cloud2d;
   pcl::KdTreeFLANN<pcl::PointXY> kdtree2d;
   pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
   Transform transform;
+  bool processed;
 
-  CloudPatch() : cloud(new Cloud), cloud2d(new pcl::PointCloud<pcl::PointXY>()){}
+  CloudPatch() : cloud(new Cloud), cloud2d(new pcl::PointCloud<pcl::PointXY>()), processed(false) {}
 
   void add(const CloudPatch& other_patch);
   void add(const Cloud& other_cloud);
@@ -135,6 +137,8 @@ class CloudPatch: public Vertex {
   void add(const Eigen::Vector3d& other_point);
   void add(const Eigen::Vector4d& other_point);
   Eigen::Vector3d getCentroid() const;
+  void fitLine(double &stddev) const;
+  void getMeanStd(double &mean, double &stddev) const;
 
   std::vector<Eigen::Vector4d> kNN(const Eigen::Vector4d& p, int n) const;
   std::vector<Eigen::Vector4d> kNN2d(const Eigen::Vector4d& p, int n) const;
