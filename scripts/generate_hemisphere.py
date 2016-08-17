@@ -1,6 +1,4 @@
-import matplotlib.pyplot as plt
-from matplotlib import cm, colors
-from mpl_toolkits.mplot3d import Axes3D
+#!/usr/bin/env python
 import numpy as np
 import sys
 
@@ -34,13 +32,15 @@ source = open('p1.pcd', 'w')
 target = open('p2.pcd', 'w')
 source.write(HEADER)
 target.write(HEADER)
+
+noisex = np.random.normal(mu, sigma, 50*50)
+noisey = np.random.normal(mu, sigma, 50*50)
+noisez = np.random.normal(mu, sigma, 50*50)
+
+noisex2 = np.random.normal(mu, sigma, 50*50)
+noisey2 = np.random.normal(mu, sigma, 50*50)
+noisez2 = np.random.normal(mu, sigma, 50*50)
 for i in range(0, 50):
   for j in range(0, 50):
-    noisex = np.random.normal(mu, sigma, 1)[0]
-    noisey = np.random.normal(mu, sigma, 1)[0]
-    noisez = np.random.normal(mu, sigma, 1)[0]
-    source.write('{} {} {}\n'.format(x[i][j] + noisex, y[i][j] + noisey, z[i][j] + noisez))
-    noisex = np.random.normal(mu, sigma, 1)[0]
-    noisey = np.random.normal(mu, sigma, 1)[0]
-    noisez = np.random.normal(mu, sigma, 1)[0]
-    target.write('{} {} {}\n'.format(x[i][j] + noisex + tfx, y[i][j] + noisey + tfy, z[i][j] + noisez + tfz))
+    source.write('{} {} {}\n'.format(x[i][j] + noisex[50*i+j], y[i][j] + noisey[50*i+j], z[i][j] + noisez[50*i+j]))
+    target.write('{} {} {}\n'.format(x[i][j] + noisex2[50*i+j] + tfx, y[i][j] + noisey2[50*i+j] + tfy, z[i][j] + noisez2[50*i+j] + tfz))
