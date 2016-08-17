@@ -1,6 +1,8 @@
 
 #include <terrain_slam/clouds.h>
 
+#include <opencv2/opencv.hpp>
+
 #include <pcl/common/transforms.h>
 #include <pcl/sample_consensus/sac_model_line.h>
 #include <pcl/sample_consensus/ransac.h>
@@ -75,7 +77,7 @@ void terrain_slam::CloudPatch::fitLine(double &stddev) const {
   pcl::SampleConsensusModelLine<pcl::PointXYZ>::Ptr model(new pcl::SampleConsensusModelLine<pcl::PointXYZ>(cloud));
 
   // Create the RANSAC object
-  pcl::RandomSampleConsensus<pcl::PointXYZ> sac(model, 0.001);
+  pcl::RandomSampleConsensus<pcl::PointXYZ> sac(model, 1.5);
 
   // Algorithm tests
   bool result = sac.computeModel();
@@ -98,6 +100,35 @@ void terrain_slam::CloudPatch::fitLine(double &stddev) const {
   double mean;
   std::vector<float> sq_dist_f(sq_dist.begin(), sq_dist.end());
   pcl::getMeanStd(sq_dist_f, mean, stddev);
+
+
+
+
+  // cv::namedWindow("test", 0);
+  // cv::Mat img = cv::Mat::zeros(1000, 1000, CV_8UC3); // -10 to 10 m in y, 2 to 18m in z
+  // for (size_t i = 0; i < cloud->points.size(); i++) {
+  //   double y = cloud->points[i].y;
+  //   double z = cloud->points[i].z;
+  //   int r = ((z - 2.0) / 16.0)*1000;
+  //   if (r < 0) r = 0;
+  //   int c = (500 + y/8.0*500);
+  //   img.at<cv::Vec3b>(r, c) = cv::Vec3b(0, 0, 255);
+  // }
+  // double t = (8.0-coeff_refined[1])/coeff_refined[4];
+  // cv::Point2d p1(8.0, coeff_refined[2]+coeff_refined[5]*t);
+  // t = (-8.0-coeff_refined[1])/coeff_refined[4];
+  // cv::Point2d p2(-8.0, coeff_refined[2]+coeff_refined[5]*t);
+
+
+  // cv::Point pt1, pt2;
+  // pt1.x = (500 + p1.x/8.0*500);
+  // pt1.y = ((p1.y - 2.0) / 16.0)*1000;
+  // pt2.x = (500 + p2.x/8.0*500);
+  // pt2.y = ((p2.y - 2.0) / 16.0)*1000;
+  // cv::line(img, pt1, pt2, cv::Scalar(0, 255, 0));
+  // cv::imshow("test", img);
+  // cv::waitKey(1);
+
 
   // // Create the filtering object
   // pcl::ExtractIndices<pcl::PointXYZ> extract;

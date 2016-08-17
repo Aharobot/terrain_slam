@@ -92,8 +92,8 @@ Eigen::Matrix4d registerClouds(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud1, pcl::
   // pcl::transformPointCloud(*cloud1, *cloud1, source_pre_tf);
   // pcl::transformPointCloud(*cloud2, *cloud2, target_pre_tf);
 
-  pcl_tools::saveCloud(cloud1, "test_tf", 1);
-  pcl_tools::saveCloud(cloud2, "test_tf", 2);
+  // pcl_tools::saveCloud(cloud1, "test_tf", 1);
+  // pcl_tools::saveCloud(cloud2, "test_tf", 2);
 
   bool bounded = false;
   bool high_precision = false;

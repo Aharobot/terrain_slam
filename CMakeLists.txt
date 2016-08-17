@@ -119,6 +119,7 @@ add_executable(evaluate_adjuster src/evaluate_adjuster.cpp
 target_link_libraries(evaluate_adjuster adjuster
                                         graph
                                         ${PCL_LIBRARIES}
+                                        ${OpenCV_LIBRARIES}
                                         ${Boost_LIBRARIES})
 set_property(TARGET evaluate_adjuster PROPERTY CXX_STANDARD 11)
 set_property(TARGET evaluate_adjuster PROPERTY CXX_STANDARD_REQUIRED ON)
@@ -129,6 +130,7 @@ add_executable(test_adjuster src/test_adjuster.cpp
                              ${MY_HEADERS})
 target_link_libraries(test_adjuster adjuster
                                     graph
+                                    ${OpenCV_LIBRARIES}
                                     ${PCL_LIBRARIES}
                                     ${Boost_LIBRARIES})
 set_property(TARGET test_adjuster PROPERTY CXX_STANDARD 11)
