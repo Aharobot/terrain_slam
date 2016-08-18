@@ -113,16 +113,16 @@ set_property(TARGET graph PROPERTY CXX_STANDARD_REQUIRED ON)
 set_property(TARGET terrain_slam PROPERTY CXX_STANDARD 11)
 set_property(TARGET terrain_slam PROPERTY CXX_STANDARD_REQUIRED ON)
 
-add_executable(evaluate_adjuster src/evaluate_adjuster.cpp
-                                 src/clouds.cpp
-                                 ${MY_HEADERS})
-target_link_libraries(evaluate_adjuster adjuster
-                                        graph
-                                        ${PCL_LIBRARIES}
-                                        ${OpenCV_LIBRARIES}
-                                        ${Boost_LIBRARIES})
-set_property(TARGET evaluate_adjuster PROPERTY CXX_STANDARD 11)
-set_property(TARGET evaluate_adjuster PROPERTY CXX_STANDARD_REQUIRED ON)
+#add_executable(evaluate_adjuster src/evaluate_adjuster.cpp
+#                                 src/clouds.cpp
+#                                 ${MY_HEADERS})
+#target_link_libraries(evaluate_adjuster adjuster
+#                                        graph
+#                                        ${PCL_LIBRARIES}
+#                                        ${OpenCV_LIBRARIES}
+#                                        ${Boost_LIBRARIES})
+#set_property(TARGET evaluate_adjuster PROPERTY CXX_STANDARD 11)
+#set_property(TARGET evaluate_adjuster PROPERTY CXX_STANDARD_REQUIRED ON)
 
 add_executable(test_adjuster src/test_adjuster.cpp
                              src/greedy_projector.cpp
