@@ -120,7 +120,7 @@ void terrain_slam::TerrainSlam::process() {
     // findTransform(patches_, 14, 21);
     // findTransform(patches_, 0, 27);
 
-    // // Save original clouds
+    // Save original clouds
     // std::cout << "Saving original clouds..." << std::endl;
     // #pragma omp parallel for
     // for (size_t i = 0; i < patches_.size(); i++) {
@@ -131,8 +131,8 @@ void terrain_slam::TerrainSlam::process() {
     //   pcl_tools::saveCloud(cloud_tf, "global", c->getId());
     //   pcl_tools::saveCloud(c->cloud, "local", c->getId());
 
-    //   pcl::PointCloud<pcl::PointXYZ>::Ptr dummy(new pcl::PointCloud<pcl::PointXYZ>());
-    //   bool res = processCloud(c, dummy);
+    //   // pcl::PointCloud<pcl::PointXYZ>::Ptr dummy(new pcl::PointCloud<pcl::PointXYZ>());
+    //   // bool res = processCloud(c, dummy);
     // }
 
     for (size_t i = 0; i < candidates.size(); i++) {
@@ -237,9 +237,17 @@ void terrain_slam::TerrainSlam::readFiles(const vector<string> &cloud_names,
       } else if (lineno == 1) {
         Eigen::Vector3d robot_xyz;
         Eigen::Vector3d robot_rpy;
-        robot_xyz(0) = boost::lexical_cast<double>((*loop)[0]);
-        robot_xyz(1) = boost::lexical_cast<double>((*loop)[1]);
-        robot_xyz(2) = boost::lexical_cast<double>((*loop)[2]);
+        // 1 -> 3.249847 0.477894 -0.364640 0-1100 1101-2201 2202-3302
+        // 2 -> 7.900984 2.540682 -0.082907
+        double dx = 0, dy = 0, dz = 0;
+        if (i > 1100 && i < 2202) {
+          dx = 3.249847; dy = 0.477894; dz = -0.364640;
+        } else if (i > 2201) {
+          dx = 7.900984; dy = 2.540682; dz = -0.082907;
+        }
+        robot_xyz(0) = boost::lexical_cast<double>((*loop)[0]) + dx;
+        robot_xyz(1) = boost::lexical_cast<double>((*loop)[1]) + dy;
+        robot_xyz(2) = boost::lexical_cast<double>((*loop)[2]) + dz;
         robot_rpy(0) = boost::lexical_cast<double>((*loop)[3]);
         robot_rpy(1) = boost::lexical_cast<double>((*loop)[4]);
         robot_rpy(2) = boost::lexical_cast<double>((*loop)[5]);
@@ -310,9 +318,10 @@ terrain_slam::TerrainSlam::createPatches(
     close_patch = close_patch || i == lines.size() - 1;
     close_patch = close_patch || jump;
 
-    double mean, stdev;
-    lines[i]->fitLine(stdev);
-    std::cout << stdev << " " << close_patch << std::endl;
+    // No clear relationship between std and features...
+    // double mean, stdev;
+    // lines[i]->fitLine(stdev);
+    // std::cout << stdev << " " << close_patch << std::endl;
 
     if (close_patch) {
       // create new patch
@@ -395,6 +404,7 @@ terrain_slam::TerrainSlam::lookForCandidates(
 
 bool terrain_slam::TerrainSlam::processCloud(const CloudPatchPtr& c, pcl::PointCloud<pcl::PointXYZ>::Ptr& output) {
   if (c->processed) {
+    // std::cout << "Cloud already processed. Hooray! " << std::endl;
     output = c->cloud2;
     return true;
   } else {
@@ -443,12 +453,13 @@ bool terrain_slam::TerrainSlam::processCloud(const CloudPatchPtr& c, pcl::PointC
 
     pcl_tools::saveCloud(output, "outl2", c->getId());
 
-    pcl::PointCloud<pcl::PointXYZ>::Ptr output_smooth(new pcl::PointCloud<pcl::PointXYZ>());
-    pcl_tools::smooth(output, *output_smooth);
-    pcl_tools::saveCloud(output_smooth, "smooth", c->getId());
+    // pcl::PointCloud<pcl::PointXYZ>::Ptr output_smooth(new pcl::PointCloud<pcl::PointXYZ>());
+    // pcl_tools::smooth(output, *output_smooth);
+    // pcl_tools::saveCloud(output_smooth, "smooth", c->getId());
 
     // std::cout << output->size() << " points." << std::endl;
-    pcl::copyPointCloud(*output, *(c->cloud2));
+    // pcl::copyPointCloud(*output, *(c->cloud2));
+    c->cloud2 = output;
     c->processed = true;
     return true;
   }
@@ -534,24 +545,24 @@ bool terrain_slam::TerrainSlam::findTransform(const vector<CloudPatchPtr> &c,
   pcl::PointCloud<pcl::PointXYZ>::Ptr target_grid(new pcl::PointCloud<pcl::PointXYZ>());
   bool res2 = processCloud(c2, target_grid);
 
-  // Do they overlap?
-  std::cout << "Computing overlap... " << std::endl;
-  pcl::PointCloud<pcl::PointXYZ>::Ptr ov_cloud1(new pcl::PointCloud<pcl::PointXYZ>());
-  pcl::PointCloud<pcl::PointXYZ>::Ptr ov_cloud2(new pcl::PointCloud<pcl::PointXYZ>());
-  overlap(c1, c2, ov_cloud2);
-  overlap(c2, c1, ov_cloud1);
+  // // Do they overlap?
+  // std::cout << "Computing overlap... " << std::endl;
+  // pcl::PointCloud<pcl::PointXYZ>::Ptr ov_cloud1(new pcl::PointCloud<pcl::PointXYZ>());
+  // pcl::PointCloud<pcl::PointXYZ>::Ptr ov_cloud2(new pcl::PointCloud<pcl::PointXYZ>());
+  // overlap(c1, c2, ov_cloud2);
+  // overlap(c2, c1, ov_cloud1);
 
-  double orig_area_1 = area(c1->cloud);
-  double overlap_area_1 = area(ov_cloud1);
+  // double orig_area_1 = area(c1->cloud);
+  // double overlap_area_1 = area(ov_cloud1);
 
-  double orig_area_2 = area(c2->cloud);
-  double overlap_area_2 = area(ov_cloud2);
+  // double orig_area_2 = area(c2->cloud);
+  // double overlap_area_2 = area(ov_cloud2);
 
-  std::cout << "Overlap 1: " << overlap_area_1/orig_area_1*100 << "%%" << std::endl;
-  std::cout << "Overlap 2: " << overlap_area_2/orig_area_2*100 << "%%" << std::endl;
-  std::cout << "Size ratio 1/2: " << orig_area_1/orig_area_2*100 << "%%" << std::endl;
-  std::cout << "Overlap 1 to 2: " << overlap_area_1/orig_area_2*100 << "%%" << std::endl;
-  std::cout << "Overlap 2 to 1: " << overlap_area_2/orig_area_1*100 << "%%" << std::endl;
+  // std::cout << "Overlap 1: " << overlap_area_1/orig_area_1*100 << "%%" << std::endl;
+  // std::cout << "Overlap 2: " << overlap_area_2/orig_area_2*100 << "%%" << std::endl;
+  // std::cout << "Size ratio 1/2: " << orig_area_1/orig_area_2*100 << "%%" << std::endl;
+  // std::cout << "Overlap 1 to 2: " << overlap_area_1/orig_area_2*100 << "%%" << std::endl;
+  // std::cout << "Overlap 2 to 1: " << overlap_area_2/orig_area_1*100 << "%%" << std::endl;
 
   if (res1 && res2) {
 

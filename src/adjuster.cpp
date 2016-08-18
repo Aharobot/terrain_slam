@@ -109,6 +109,7 @@ terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
 
   solver_options.linear_solver_type = ceres::DENSE_QR; //SPARSE_NORMAL_CHOLESKY;
   solver_options.max_num_iterations = 5000;
+  solver_options.use_nonmonotonic_steps = true;
   solver_options.minimizer_progress_to_stdout = true;
   solver_options.num_threads = sysconf(_SC_NPROCESSORS_ONLN);
   solver_options.num_linear_solver_threads = sysconf(_SC_NPROCESSORS_ONLN);
@@ -125,9 +126,6 @@ terrain_slam::Adjuster::adjust(const boost::shared_ptr<CloudPatch> &cloud_fixed,
     solver_options.function_tolerance  = 1e-8;  // default 1e-6
     solver_options.gradient_tolerance  = 1e-8;
   }
-
-  solver_options.minimizer_progress_to_stdout = true;
-  solver_options.use_nonmonotonic_steps = true;
 
   ceres::Solver::Summary sum;
   ceres::Solve(solver_options, problem_, &sum);

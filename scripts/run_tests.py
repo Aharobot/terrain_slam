@@ -9,15 +9,20 @@ generate_hemisphere = ['python', 'generate_hemisphere.py']
 generate_step = ['python', 'generate_step.py']
 register_clouds = ['./../build/test_adjuster p1.pcd p2.pcd']
 
-noises = [0.001, 0.01, 0.2, 0.3, 0.4, 0.5, 1.0]
-xs = [0.5, 1.0, 2.0, 4.0, 6.0]
-ys = [0.5, 1.0, 2.0, 4.0, 6.0]
+# noises = [0.001, 0.01, 0.2, 0.3, 0.4, 0.5, 1.0]
+# xs = [0.5, 1.0, 2.0, 4.0, 6.0]
+# ys = [0.5, 1.0, 2.0, 4.0, 6.0]
+# yaws = [0]
+noises = [0.2, 0.3, 0.4]
+xs = [1.0, 2.0, 4.0, 6.0]
+ys = [1.0, 2.0, 4.0, 6.0]
 zs = [0, 0.5, 1.0]
-yaws = [0]
+yaws = [0, 0.1, 0.2]
 
 cost = []
 convergence = []
-transform = numpy.zeros((525, 4))
+# transform = numpy.zeros((525, 4))
+transform = numpy.zeros((432, 4))  # se ha quedado en el 135
 f = open('workfile', 'w')
 idx = 0
 s =  'i noise convergence cost x y z yaw fx fy fz fyaw\n'
@@ -34,7 +39,8 @@ for noise in noises:
           args.append(str(y))
           args.append(str(z))
           args.append(str(yaw))
-          generate_clouds = generate_hemisphere + args
+          # generate_clouds = generate_hemisphere + args
+          generate_clouds = generate_step + args
           cmd = subprocess.call(generate_clouds)
           # print register_clouds
           # print 'Calling register'
